@@ -4,15 +4,23 @@ use std::mem::size_of;
 use crate::schema::*;
 use crate::types::*;
 
-#[derive(Debug, Clone)]
-pub enum AttrData {
-    // I bumped this to i64 because the `AttrData` enum was already 8 bytes, so using i32
+#[repr(u8)]
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum AttrType {
+    Integer,
+    Float,
+    String,
+}
+
+#[derive(Copy, Clone)]
+union AttrData {
+    // I bumped this to i64 because the `AttrData` already had an 8 byte variant, so using i32
     // wouldn't save any space
-    Integer(i64),
-    Float(f64),
+    integer: i64,
+    float: f64,
 
     // points to the start index of the null-terminated string in the strbuf
-    String(usize),
+    string: usize,
 }
 
 pub enum MappedAttrData<'a> {
@@ -26,6 +34,7 @@ pub struct Record {
     // I got rid of the pointer to `OrderMaker` in the C++ version because doing that isn't
     // particularly idiomatic in Rust
     data: Vec<AttrData>,
+    kinds: Vec<AttrType>,
     strbuf: String,
 }
 
@@ -44,6 +53,7 @@ impl Record {
         // using the `Vec` here instead of `new char[PAGE_SIZE]` to 1: be more rust-y and 2: not
         // allocate 262 kb unnecessarily
         let mut data = Vec::new();
+        let mut kinds = Vec::new();
         let mut strbuf = String::new();
         let mut attr_buf = Vec::new();
 
@@ -56,16 +66,21 @@ impl Record {
                     let s = String::from_utf8_lossy(&attr_buf);
                     let val = s.parse().ok()?;
 
-                    data.push(AttrData::Integer(val));
+                    kinds.push(AttrType::Integer);
+                    data.push(AttrData { integer: val });
                 }
                 Type::Float => {
                     let s = String::from_utf8_lossy(&attr_buf);
                     let val = s.parse().ok()?;
 
-                    data.push(AttrData::Float(val));
+                    kinds.push(AttrType::Float);
+                    data.push(AttrData { float: val });
                 }
                 Type::String => {
-                    data.push(AttrData::String(strbuf.len()));
+                    kinds.push(AttrType::String);
+                    data.push(AttrData {
+                        string: strbuf.len(),
+                    });
                     if attr_buf.last() != Some(&b'\0') {
                         attr_buf.push(b'\0');
                     }
@@ -83,27 +98,29 @@ impl Record {
         Some(())
     }
 
-    fn map_attr_data<'a>(&'a self, attr: &'a AttrData) -> MappedAttrData<'a> {
-        match attr {
-            AttrData::Integer(val) => MappedAttrData::Integer(val),
-            AttrData::Float(val) => MappedAttrData::Float(val),
-            AttrData::String(start) => {
-                let s = &self.strbuf[*start..];
+    pub fn get_column<'a>(&'a self, index: usize) -> Option<MappedAttrData<'a>> {
+        match self.kinds.get(index)? {
+            AttrType::Integer => {
+                let val = unsafe { &self.data[index].integer };
+                Some(MappedAttrData::Integer(val))
+            }
+            AttrType::Float => {
+                let val = unsafe { &self.data[index].float };
+                Some(MappedAttrData::Float(val))
+            }
+            AttrType::String => {
+                let start = unsafe { self.data[index].string };
+                let s = &self.strbuf[start..];
                 let end = s.find('\0').unwrap_or(s.len());
-                MappedAttrData::String(&s[..end])
+                Some(MappedAttrData::String(&s[..end]))
             }
         }
     }
 
     pub fn get_data(&self) -> Vec<MappedAttrData> {
-        self.data
-            .iter()
-            .map(|attr| self.map_attr_data(attr))
+        (0..self.data.len())
+            .map(|attr| self.get_column(attr).unwrap())
             .collect()
-    }
-
-    pub fn get_column(&self, column: usize) -> Option<MappedAttrData> {
-        self.data.get(column).map(|attr| self.map_attr_data(attr))
     }
 
     pub fn get_size(&self) -> usize {
@@ -150,11 +167,11 @@ impl Record {
         let atts = schema.get_atts();
 
         print!("Record: {{ ");
-        for (i, att) in atts.iter().enumerate() {
-            match &self.data[i] {
-                AttrData::Integer(val) => print!("{}: {} ", att.name, val),
-                AttrData::Float(val) => print!("{}: {} ", att.name, val),
-                AttrData::String(val) => print!("{}: {} ", att.name, val),
+        for (i, (att_data, att_schema)) in self.get_data().iter().zip(atts).enumerate() {
+            match att_data {
+                MappedAttrData::Integer(val) => print!("{}: {} ", att_schema.name, val),
+                MappedAttrData::Float(val) => print!("{}: {} ", att_schema.name, val),
+                MappedAttrData::String(val) => print!("{}: {} ", att_schema.name, val),
             }
 
             if i < atts.len() - 1 {
@@ -162,8 +179,6 @@ impl Record {
             }
         }
 
-        // C++ code doesn't include the << endl, but I added it anyway because it feels weird to
-        // bot have
-        println!("}}");
+        print!("}}");
     }
 }
