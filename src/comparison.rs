@@ -41,11 +41,11 @@ impl Comparison {
         macro_rules! compare {
             ($attr_type:ident) => {{
                 let left_val = match left_val {
-                    AttrData::$attr_type(v) => v,
+                    MappedAttrData::$attr_type(v) => v,
                     _ => panic!("type mismatch"),
                 };
                 let right_val = match right_val {
-                    AttrData::$attr_type(v) => v,
+                    MappedAttrData::$attr_type(v) => v,
                     _ => panic!("type mismatch"),
                 };
 

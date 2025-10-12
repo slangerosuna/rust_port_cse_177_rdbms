@@ -1,25 +1,24 @@
 use std::io::BufRead;
 use std::mem::size_of;
 
-use crate::comparison::*;
 use crate::schema::*;
 use crate::types::*;
 
 #[derive(Debug, Clone)]
 pub enum AttrData {
-    // I bumped this to i64 because the `AttrData` enum was already 24 bytes, so using i32
+    // I bumped this to i64 because the `AttrData` enum was already 8 bytes, so using i32
     // wouldn't save any space
     Integer(i64),
     Float(f64),
 
-    // String here is 24 bytes (pointer, length, capacity), which does increate the size of
-    // the overall enum to 32 bytes, making the C++ `Record` implementation more space efficient
-    // (not counting the temporary 262kb allocation in Record::ExtractNextRecord) but the Rust
-    // implementation is safer and also reduces the amount of indirection because you don't have
-    // to store the offsets to each element, meaning that the only indirection is when there's
-    // strings (which storing null-terminated does tie in terms of indirection for strings, but
-    // the rust implementation is better for ints and floats)
-    String(String),
+    // points to the start index of the null-terminated string in the strbuf
+    String(usize),
+}
+
+pub enum MappedAttrData<'a> {
+    Integer(&'a i64),
+    Float(&'a f64),
+    String(&'a str),
 }
 
 #[derive(Default, Clone)]
@@ -27,6 +26,7 @@ pub struct Record {
     // I got rid of the pointer to `OrderMaker` in the C++ version because doing that isn't
     // particularly idiomatic in Rust
     data: Vec<AttrData>,
+    strbuf: String,
 }
 
 impl Record {
@@ -44,6 +44,7 @@ impl Record {
         // using the `Vec` here instead of `new char[PAGE_SIZE]` to 1: be more rust-y and 2: not
         // allocate 262 kb unnecessarily
         let mut data = Vec::new();
+        let mut strbuf = String::new();
         let mut attr_buf = Vec::new();
 
         for (i, att) in atts.iter().enumerate() {
@@ -64,8 +65,11 @@ impl Record {
                     data.push(AttrData::Float(val));
                 }
                 Type::String => {
-                    let s = String::from_utf8_lossy(&attr_buf);
-                    data.push(AttrData::String(s.to_string()));
+                    data.push(AttrData::String(strbuf.len()));
+                    if attr_buf.last() != Some(&b'\0') {
+                        attr_buf.push(b'\0');
+                    }
+                    strbuf.push_str(&String::from_utf8_lossy(&attr_buf));
                 }
                 Type::Name => {
                     panic!("Name not expected in record bin");
@@ -74,28 +78,36 @@ impl Record {
         }
 
         self.data = data;
+        self.strbuf = strbuf;
 
         Some(())
     }
 
-    pub fn get_data(&self) -> &Vec<AttrData> {
-        &self.data
+    fn map_attr_data<'a>(&'a self, attr: &'a AttrData) -> MappedAttrData<'a> {
+        match attr {
+            AttrData::Integer(val) => MappedAttrData::Integer(val),
+            AttrData::Float(val) => MappedAttrData::Float(val),
+            AttrData::String(start) => {
+                let s = &self.strbuf[*start..];
+                let end = s.find('\0').unwrap_or(s.len());
+                MappedAttrData::String(&s[..end])
+            }
+        }
     }
 
-    pub fn get_column(&self, column: usize) -> Option<&AttrData> {
-        self.data.get(column)
+    pub fn get_data(&self) -> Vec<MappedAttrData> {
+        self.data
+            .iter()
+            .map(|attr| self.map_attr_data(attr))
+            .collect()
+    }
+
+    pub fn get_column(&self, column: usize) -> Option<MappedAttrData> {
+        self.data.get(column).map(|attr| self.map_attr_data(attr))
     }
 
     pub fn get_size(&self) -> usize {
-        size_of::<AttrData>() * self.data.capacity()
-            + self
-                .data
-                .iter()
-                .filter_map(|attr| match attr {
-                    AttrData::String(s) => Some(s.capacity()),
-                    _ => None,
-                })
-                .sum::<usize>()
+        size_of::<AttrData>() * self.data.capacity() + self.strbuf.capacity() * size_of::<u8>()
     }
 
     pub fn clear(&mut self) {
