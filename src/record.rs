@@ -39,10 +39,6 @@ pub struct Record {
 }
 
 impl Record {
-    pub fn consume(&mut self, to_consume: Vec<AttrData>) {
-        self.data = to_consume;
-    }
-
     pub fn extract_next_record(
         &mut self,
         schema: &Schema,
