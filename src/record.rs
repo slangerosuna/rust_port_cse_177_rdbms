@@ -29,7 +29,6 @@ impl std::fmt::Debug for AttrData {
     }
 }
 
-#[derive(Debug)]
 pub enum MappedAttrData<'a> {
     Integer(&'a i64),
     Float(&'a f64),
@@ -75,7 +74,6 @@ impl Record {
                 attr_buf.pop();
             }
 
-
             match att.type_ {
                 Type::Integer => {
                     let s = String::from_utf8_lossy(&attr_buf);
@@ -111,9 +109,8 @@ impl Record {
         self.kinds = kinds;
         self.strbuf = strbuf;
 
-        // Consume any trailing newline or whitespace to prepare for the next record
-        let mut line_ending = Vec::new();
-        let _ = buf_reader.read_until(b'\n', &mut line_ending);
+        // get rid of trailing newline (should also clear stuff after the last | which could be used for comments, ig)
+        buf_reader.read_until(b'\n', &mut Vec::new());
 
         Some(())
     }
@@ -156,13 +153,12 @@ impl Record {
             .iter()
             .map(|&i| self.data.get(i as usize))
             .collect::<Vec<_>>();
-
         let new_kinds = atts_to_keep
             .iter()
             .map(|&i| self.kinds.get(i as usize))
             .collect::<Vec<_>>();
 
-        if new_data.iter().any(|attr| attr.is_none()) || new_kinds.iter().any(|kind| kind.is_none()) {
+        if new_data.iter().any(|attr| attr.is_none()) {
             return None;
         }
 
@@ -184,18 +180,30 @@ impl Record {
     // Record::MergeRecords with a sequence of calls to merge_right/left and project because it is
     // a lot clearer this way
     pub fn merge_right(&mut self, other: &Record) {
-        self.data.extend_from_slice(&other.data);
+        let str_buf_offset = self.strbuf.len();
+        self.strbuf.push_str(&other.strbuf);
         self.kinds.extend_from_slice(&other.kinds);
+        for (i, kind) in other.kinds.iter().enumerate() {
+            match kind {
+                AttrType::Integer => {
+                    self.data.push(other.data[i]);
+                }
+                AttrType::Float => {
+                    self.data.push(other.data[i]);
+                }
+                AttrType::String => {
+                    let start = unsafe { other.data[i].string };
+                    let string_data = str_buf_offset + start;
+                    self.data.push(AttrData { string: string_data });
+                }
+            }
+        }
     }
 
     pub fn merge_left(&mut self, other: &Record) {
-        let mut new_data = other.data.clone();
-        new_data.extend_from_slice(&self.data);
-        self.data = new_data;
-        
-        let mut new_kinds = other.kinds.clone();
-        new_kinds.extend_from_slice(&self.kinds);
-        self.kinds = new_kinds;
+        let mut other = other.clone();
+        other.merge_right(self);
+        *self = other;
     }
 
     pub fn display(&self, schema: &Schema) {
@@ -217,42 +225,33 @@ impl Record {
         print!("}}");
     }
 
-    /// Convert record to pipe-delimited format (compatible with extract_next_record)
-    pub fn to_pipe_delimited(&self) -> String {
-        let mut result = String::new();
-        
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut buffer = String::new();
+
         for (i, data) in self.data.iter().enumerate() {
-            if i > 0 {
-                result.push('|');
-            }
-            
             match self.kinds[i] {
                 AttrType::Integer => {
                     let val = unsafe { data.integer };
-                    result.push_str(&val.to_string());
+                    let val = val.to_string();
+                    buffer.push_str(&val);
                 }
                 AttrType::Float => {
                     let val = unsafe { data.float };
-                    result.push_str(&val.to_string());
+                    let val = val.to_string();
+                    buffer.push_str(&val);
                 }
                 AttrType::String => {
-                    // Extract the null-terminated string from strbuf using the start index
                     let start = unsafe { data.string };
                     let s = &self.strbuf[start..];
                     let end = s.find('\0').unwrap_or(s.len());
                     let string_data = &s[..end];
-                    result.push_str(string_data);
+                    buffer.push_str(string_data);
                 }
             }
+            buffer.push('|');
         }
-        
-        result.push('|'); // Add trailing delimiter
-        result.push('\n'); // Add newline
-        result
-    }
 
-    /// Serialize record to bytes for storage (used by DBFile)
-    pub fn to_bytes(&self) -> Vec<u8> {
-        self.to_pipe_delimited().into_bytes()
+        buffer.push('\n');
+        buffer.as_bytes().to_vec()
     }
 }

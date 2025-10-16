@@ -10,7 +10,11 @@ use std::collections::HashMap;
 mod ast;
 mod lexer;
 
-lalrpop_mod!(grammar, "/compiler/grammar.rs");
+lalrpop_mod!(
+    #[allow(unused)]
+    grammar,
+    "/compiler/grammar.rs"
+);
 
 pub use ast::*;
 use grammar::*;

@@ -1,3 +1,6 @@
+pub const PAGE_SIZE: usize = 131072;
+pub const PIPE_BUFFER_SIZE: usize = 10000;
+
 mod catalog;
 mod comparison;
 mod compiler;

@@ -222,6 +222,68 @@ impl OrderMaker {
         Ordering::Equal
     }
 
+    pub fn run_with_different_order(
+        &self,
+        left: &Record,
+        right: &Record,
+        order_right: &OrderMaker,
+    ) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+
+        let min_len = self.atts.len().min(order_right.atts.len());
+
+        for i in 0..min_len {
+            let (left_att_idx, left_att_type) = self.atts[i];
+            let (right_att_idx, right_att_type) = order_right.atts[i];
+
+            let left_data = &left.get_data()[left_att_idx as usize];
+            let right_data = &right.get_data()[right_att_idx as usize];
+
+            let cmp = match (left_att_type, right_att_type) {
+                (Type::Integer, Type::Integer) => {
+                    let left_val = match left_data {
+                        MappedAttrData::Integer(v) => *v,
+                        _ => panic!("type mismatch"),
+                    };
+                    let right_val = match right_data {
+                        MappedAttrData::Integer(v) => *v,
+                        _ => panic!("type mismatch"),
+                    };
+                    left_val.cmp(&right_val)
+                }
+                (Type::Float, Type::Float) => {
+                    let left_val = match left_data {
+                        MappedAttrData::Float(v) => *v,
+                        _ => panic!("type mismatch"),
+                    };
+                    let right_val = match right_data {
+                        MappedAttrData::Float(v) => *v,
+                        _ => panic!("type mismatch"),
+                    };
+                    left_val.partial_cmp(&right_val).unwrap_or(Ordering::Equal)
+                }
+                (Type::String, Type::String) => {
+                    let left_val = match left_data {
+                        MappedAttrData::String(v) => v,
+                        _ => panic!("type mismatch"),
+                    };
+                    let right_val = match right_data {
+                        MappedAttrData::String(v) => v,
+                        _ => panic!("type mismatch"),
+                    };
+                    left_val.cmp(right_val)
+                }
+                _ => panic!("type mismatch between left and right attributes"),
+            };
+
+            if cmp != Ordering::Equal {
+                return cmp;
+            }
+        }
+
+        Ordering::Equal
+    }
+
     pub fn and_merge(&mut self, other: &OrderMaker) {
         for (att_idx, att_type) in &other.atts {
             if !self

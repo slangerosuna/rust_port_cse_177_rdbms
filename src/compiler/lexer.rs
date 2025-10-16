@@ -1,3 +1,5 @@
+#![allow(unused)]
+
 use logos::Logos;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
