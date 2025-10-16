@@ -178,7 +178,9 @@ impl Record {
     // I got rid of the simultaneous merge right, merge left and project in the C++ code in favor
     // of just splitting them up into separate methods. I will replace calls of
     // Record::MergeRecords with a sequence of calls to merge_right/left and project because it is
-    // a lot clearer this way
+    // a lot clearer what's actually happening this way. if this is undesired, I could just make a
+    // Record::merge_records that does the same thing with the existing merge_right/left and project
+    // methods
     pub fn merge_right(&mut self, other: &Record) {
         let str_buf_offset = self.strbuf.len();
         self.strbuf.push_str(&other.strbuf);
