@@ -5,7 +5,7 @@ use crate::schema::*;
 use crate::types::*;
 
 #[repr(u8)]
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 enum AttrType {
     Integer,
     Float,
@@ -23,13 +23,20 @@ union AttrData {
     string: usize,
 }
 
+impl std::fmt::Debug for AttrData {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "AttrData {{ ... }}")
+    }
+}
+
+#[derive(Debug)]
 pub enum MappedAttrData<'a> {
     Integer(&'a i64),
     Float(&'a f64),
     String(&'a str),
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Record {
     // I got rid of the pointer to `OrderMaker` in the C++ version because doing that isn't
     // particularly idiomatic in Rust
@@ -39,6 +46,14 @@ pub struct Record {
 }
 
 impl Record {
+    pub fn new() -> Self {
+        Record {
+            data: Vec::new(),
+            kinds: Vec::new(),
+            strbuf: String::new(),
+        }
+    }
+
     pub fn extract_next_record(
         &mut self,
         schema: &Schema,
@@ -55,7 +70,11 @@ impl Record {
 
         for (i, att) in atts.iter().enumerate() {
             attr_buf.clear();
-            buf_reader.read_until(b'\0', &mut attr_buf).ok()?;
+            buf_reader.read_until(b'|', &mut attr_buf).ok()?;
+            if attr_buf.last() == Some(&b'|') {
+                attr_buf.pop();
+            }
+
 
             match att.type_ {
                 Type::Integer => {
@@ -89,7 +108,12 @@ impl Record {
         }
 
         self.data = data;
+        self.kinds = kinds;
         self.strbuf = strbuf;
+
+        // Consume any trailing newline or whitespace to prepare for the next record
+        let mut line_ending = Vec::new();
+        let _ = buf_reader.read_until(b'\n', &mut line_ending);
 
         Some(())
     }
@@ -133,13 +157,23 @@ impl Record {
             .map(|&i| self.data.get(i as usize))
             .collect::<Vec<_>>();
 
-        if new_data.iter().any(|attr| attr.is_none()) {
+        let new_kinds = atts_to_keep
+            .iter()
+            .map(|&i| self.kinds.get(i as usize))
+            .collect::<Vec<_>>();
+
+        if new_data.iter().any(|attr| attr.is_none()) || new_kinds.iter().any(|kind| kind.is_none()) {
             return None;
         }
 
         self.data = new_data
             .into_iter()
             .map(|attr| attr.unwrap().clone())
+            .collect();
+
+        self.kinds = new_kinds
+            .into_iter()
+            .map(|kind| kind.unwrap().clone())
             .collect();
 
         Some(())
@@ -151,12 +185,17 @@ impl Record {
     // a lot clearer this way
     pub fn merge_right(&mut self, other: &Record) {
         self.data.extend_from_slice(&other.data);
+        self.kinds.extend_from_slice(&other.kinds);
     }
 
     pub fn merge_left(&mut self, other: &Record) {
         let mut new_data = other.data.clone();
         new_data.extend_from_slice(&self.data);
         self.data = new_data;
+        
+        let mut new_kinds = other.kinds.clone();
+        new_kinds.extend_from_slice(&self.kinds);
+        self.kinds = new_kinds;
     }
 
     pub fn display(&self, schema: &Schema) {
@@ -176,5 +215,44 @@ impl Record {
         }
 
         print!("}}");
+    }
+
+    /// Convert record to pipe-delimited format (compatible with extract_next_record)
+    pub fn to_pipe_delimited(&self) -> String {
+        let mut result = String::new();
+        
+        for (i, data) in self.data.iter().enumerate() {
+            if i > 0 {
+                result.push('|');
+            }
+            
+            match self.kinds[i] {
+                AttrType::Integer => {
+                    let val = unsafe { data.integer };
+                    result.push_str(&val.to_string());
+                }
+                AttrType::Float => {
+                    let val = unsafe { data.float };
+                    result.push_str(&val.to_string());
+                }
+                AttrType::String => {
+                    // Extract the null-terminated string from strbuf using the start index
+                    let start = unsafe { data.string };
+                    let s = &self.strbuf[start..];
+                    let end = s.find('\0').unwrap_or(s.len());
+                    let string_data = &s[..end];
+                    result.push_str(string_data);
+                }
+            }
+        }
+        
+        result.push('|'); // Add trailing delimiter
+        result.push('\n'); // Add newline
+        result
+    }
+
+    /// Serialize record to bytes for storage (used by DBFile)
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.to_pipe_delimited().into_bytes()
     }
 }

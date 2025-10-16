@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused)]
+
 use crate::schema::*;
 use crate::types::*;
 
@@ -5,7 +8,7 @@ pub struct Catalog {}
 
 impl Catalog {
     pub fn new(filename: String) -> Self {
-        todo!()
+        Catalog {}
     }
 
     // I'm using `Result` instead of `bool` because `false` represents failure in the C++ version,

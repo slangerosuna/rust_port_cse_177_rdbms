@@ -10,7 +10,7 @@ pub struct Comparison {
     pub operand2: Target,
     pub which_att2: i32,
 
-    pub attr_type: Type,
+    pub att_type: Type,
     pub op: CompOp,
 }
 
@@ -24,8 +24,73 @@ pub struct Cnf {
     pub and_list: Vec<Comparison>,
 }
 
+impl Cnf {
+    pub fn new() -> Self {
+        Self {
+            num_ands: 0,
+            and_list: Vec::new(),
+        }
+    }
+
+    pub fn get_sort_orders(&self) -> (OrderMaker, OrderMaker) {
+        let mut left = OrderMaker::default();
+        let mut right = OrderMaker::default();
+
+        for comparison in &self.and_list {
+            let is_join = (comparison.operand1 == Target::Left
+                && comparison.operand2 == Target::Right)
+                || (comparison.operand2 == Target::Left && comparison.operand1 == Target::Right);
+
+            if is_join {
+                if comparison.operand1 == Target::Left {
+                    left.atts.push((comparison.which_att1, comparison.att_type));
+                } else {
+                    right
+                        .atts
+                        .push((comparison.which_att1, comparison.att_type));
+                }
+
+                if comparison.operand2 == Target::Left {
+                    left.atts.push((comparison.which_att2, comparison.att_type));
+                } else {
+                    right
+                        .atts
+                        .push((comparison.which_att2, comparison.att_type));
+                }
+            }
+        }
+
+        (left, right)
+    }
+
+    pub fn run(&self, left: &Record, right: &Record) -> bool {
+        for comparison in &self.and_list {
+            if !comparison.run(left, right) {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn add_comparison(&mut self, comparison: Comparison) {
+        self.and_list.push(comparison);
+        self.num_ands += 1;
+    }
+}
+
 impl Comparison {
-    fn run(&self, left: &Record, right: &Record) -> bool {
+    pub fn new() -> Self {
+        Comparison {
+            operand1: Target::Left,
+            which_att1: 0,
+            operand2: Target::Right,
+            which_att2: 0,
+            att_type: Type::Integer,
+            op: CompOp::Equal,
+        }
+    }
+
+    pub fn run(&self, left: &Record, right: &Record) -> bool {
         let left_val = match self.operand1 {
             Target::Left => &left.get_data()[self.which_att1 as usize],
             Target::Right => &right.get_data()[self.which_att1 as usize],
@@ -57,7 +122,7 @@ impl Comparison {
             }};
         }
 
-        match self.attr_type {
+        match self.att_type {
             Type::Integer => compare!(Integer),
             Type::Float => compare!(Float),
             Type::String => compare!(String),
@@ -105,7 +170,67 @@ impl OrderMaker {
         }
     }
 
-    pub fn run(&self, left: &Record, right: &Record) -> bool {
-        todo!();
+    pub fn run(&self, left: &Record, right: &Record) -> std::cmp::Ordering {
+        use std::cmp::Ordering;
+
+        for (att_idx, att_type) in &self.atts {
+            let left_data = &left.get_data()[*att_idx as usize];
+            let right_data = &right.get_data()[*att_idx as usize];
+
+            let cmp = match att_type {
+                Type::Integer => {
+                    let left_val = match left_data {
+                        MappedAttrData::Integer(v) => *v,
+                        _ => panic!("type mismatch"),
+                    };
+                    let right_val = match right_data {
+                        MappedAttrData::Integer(v) => *v,
+                        _ => panic!("type mismatch"),
+                    };
+                    left_val.cmp(&right_val)
+                }
+                Type::Float => {
+                    let left_val = match left_data {
+                        MappedAttrData::Float(v) => *v,
+                        _ => panic!("type mismatch"),
+                    };
+                    let right_val = match right_data {
+                        MappedAttrData::Float(v) => *v,
+                        _ => panic!("type mismatch"),
+                    };
+                    left_val.partial_cmp(&right_val).unwrap_or(Ordering::Equal)
+                }
+                Type::String => {
+                    let left_val = match left_data {
+                        MappedAttrData::String(v) => v,
+                        _ => panic!("type mismatch"),
+                    };
+                    let right_val = match right_data {
+                        MappedAttrData::String(v) => v,
+                        _ => panic!("type mismatch"),
+                    };
+                    left_val.cmp(right_val)
+                }
+                _ => panic!("unsupported type for ordering"),
+            };
+
+            if cmp != Ordering::Equal {
+                return cmp;
+            }
+        }
+
+        Ordering::Equal
+    }
+
+    pub fn and_merge(&mut self, other: &OrderMaker) {
+        for (att_idx, att_type) in &other.atts {
+            if !self
+                .atts
+                .iter()
+                .any(|(existing_idx, _)| existing_idx == att_idx)
+            {
+                self.atts.push((*att_idx, *att_type));
+            }
+        }
     }
 }

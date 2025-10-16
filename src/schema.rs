@@ -2,7 +2,7 @@ use crate::types::*;
 use itertools::izip;
 
 // The Clone handles Attribute::Attribute(const Attribute& _other)
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Attribute {
     pub name: String,
     pub type_: Type,
@@ -20,7 +20,7 @@ impl Default for Attribute {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug)]
 pub struct Schema {
     no_tuples: i32,
     f_path: String,
@@ -60,7 +60,7 @@ impl Schema {
         Schema {
             no_tuples,
             f_path: f_path.to_string(),
-            attributes: Vec::new(),
+            attributes,
         }
     }
 
@@ -74,6 +74,15 @@ impl Schema {
         distincts: &[i32],
     ) -> Self {
         Self::new(attributes, attribute_types, distincts, 0, "")
+    }
+
+    pub fn default() -> Self {
+        Self::new(&[], &[], &[], 0, "")
+    }
+
+    /// Get number of attributes (matching C++ GetNumAtts)
+    pub fn get_num_atts(&self) -> usize {
+        self.attributes.len()
     }
 
     // In the C++ version this is GetNumAtts, but get_atts_len feels like the more idiomatice name
