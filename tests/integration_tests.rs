@@ -335,7 +335,7 @@ mod tests {
         let schema = Schema::new(&attributes, &types, &distincts, 0, "test.tbl");
 
         let scan = Scan::new(schema.clone(), "test_table".to_string());
-        let comparison = Comparison::new();
+        let comparison = Comparison::default();
 
         let mut select = Select::new(schema, comparison, Box::new(scan));
         select.set_no_pages(5);

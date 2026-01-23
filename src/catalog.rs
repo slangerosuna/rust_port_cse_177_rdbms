@@ -27,7 +27,7 @@ impl Catalog {
         todo!()
     }
 
-    pub fn get_data_file(&self, table: &str, data_file: &mut String) -> Option<()> {
+    pub fn get_data_file(&self, table: &str) -> Option<String> {
         todo!()
     }
 
@@ -48,15 +48,15 @@ impl Catalog {
         todo!()
     }
 
-    pub fn get_tables(&self, tables: &mut Vec<String>) {
+    pub fn get_tables(&self) -> Vec<String> {
         todo!()
     }
 
-    pub fn get_attributes(&self, table: &str, attributes: &mut Vec<String>) -> Option<()> {
+    pub fn get_attributes(&self, table: &str) -> Option<Vec<String>> {
         todo!()
     }
 
-    pub fn get_schema(&self, table: &str, schema: &mut Schema) -> Option<()> {
+    pub fn get_schema(&self, table: &str) -> Option<Schema> {
         todo!()
     }
 

@@ -87,16 +87,14 @@ impl RelationalOp for Select {
     }
 
     fn get_next(&mut self, record: &mut Record) -> Result<bool> {
-        loop {
-            let mut temp_record = Record::new();
+        let mut temp_record = Record::new();
 
-            if !self.producer.get_next(&mut temp_record)? {
-                return Ok(false);
-            }
-
-            *record = temp_record;
-            return Ok(true);
+        if !self.producer.get_next(&mut temp_record)? {
+            return Ok(false);
         }
+
+        *record = temp_record;
+        Ok(true)
     }
 
     fn print(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -98,7 +98,7 @@ impl<'a> QueryCompiler<'a> {
         // For now, we'll create a simple select operator on the first table
         if let Some((table_name, operator)) = table_operators.iter_mut().next() {
             // Create a placeholder comparison
-            let comparison = Comparison::new(); // TODO: Build from predicate
+            let comparison = Comparison::default(); // TODO: Build from predicate
             let schema = table_schemas.get(table_name).unwrap().clone();
 
             // This is a simplified approach - in reality we'd need to:
@@ -127,7 +127,7 @@ impl<'a> QueryCompiler<'a> {
             let right_schema = Schema::default();
             let out_schema = Schema::default();
 
-            let comparison = Comparison::new(); // TODO: Extract from predicate
+            let comparison = Comparison::default(); // TODO: Extract from predicate
 
             result = Box::new(Join::new(
                 left_schema,

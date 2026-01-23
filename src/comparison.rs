@@ -78,8 +78,8 @@ impl Cnf {
     }
 }
 
-impl Comparison {
-    pub fn new() -> Self {
+impl Default for Comparison {
+    fn default() -> Self {
         Comparison {
             operand1: Target::Left,
             which_att1: 0,
@@ -89,7 +89,9 @@ impl Comparison {
             op: CompOp::Equal,
         }
     }
+}
 
+impl Comparison {
     pub fn run(&self, left: &Record, right: &Record) -> bool {
         let left_val = match self.operand1 {
             Target::Left => &left.get_data()[self.which_att1 as usize],

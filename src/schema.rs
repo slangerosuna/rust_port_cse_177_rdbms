@@ -76,10 +76,6 @@ impl Schema {
         Self::new(attributes, attribute_types, distincts, 0, "")
     }
 
-    pub fn default() -> Self {
-        Self::new(&[], &[], &[], 0, "")
-    }
-
     /// Get number of attributes (matching C++ GetNumAtts)
     pub fn get_num_atts(&self) -> usize {
         self.attributes.len()
