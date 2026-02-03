@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn test_comparison_creation() {
-        let comparison = Comparison::new();
+        let comparison = Comparison::default();
         // Basic creation should work - comparison has sane defaults
         assert!(true);
     }
@@ -305,7 +305,7 @@ mod tests {
         let mut cursor2 = Cursor::new(data2.as_bytes());
         record2.extract_next_record(&schema, &mut cursor2);
 
-        let comparison = Comparison::new(); // Defaults: left[0] == right[0]
+        let comparison = Comparison::default(); // Defaults: left[0] == right[0]
         let result = comparison.run(&record1, &record2);
         assert!(!result); // 5 != 3
     }
@@ -589,7 +589,7 @@ mod tests {
         let schema = Schema::new(&attributes, &types, &distincts, 0, "data.tbl");
 
         let scan = Scan::new(schema.clone(), "data_table".to_string());
-        let comparison = Comparison::new();
+        let comparison = Comparison::default();
         let select = Select::new(schema.clone(), comparison, Box::new(scan));
 
         let proj_attrs = vec!["id".to_string(), "value".to_string()];

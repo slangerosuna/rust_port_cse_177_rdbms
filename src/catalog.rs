@@ -1,25 +1,44 @@
 #![allow(dead_code)]
 #![allow(unused)]
 
+use std::collections::HashMap;
+
 use crate::schema::*;
 use crate::types::*;
 
-pub struct Catalog {}
+use rusqlite::{Connection, Result};
+
+pub struct Catalog {
+    filename: String,
+    conn: Connection,
+
+    table_schema: HashMap<String, Schema>,
+}
 
 impl Catalog {
-    pub fn new(filename: String) -> Self {
-        Catalog {}
+    pub fn new(filename: String) -> Result<Self> {
+        let mut conn = Connection::open(&filename)?;
+        let mut table_schema = HashMap::new();
+
+        conn.execute_batch("
+            CREATE TABLE IF NOT EXISTS Tables (name VARCHAR, num_tuples INT, file VARCHAR);
+            CREATE TABLE IF NOT EXISTS Attributes (table_name VARCHAR, position INT, name VARCHAR, type VARCHAR, num_distinct INT);
+        ");
+
+        // TODO: fill table_schema from the database
+
+        Ok(Catalog {
+            filename,
+            table_schema,
+            conn,
+        })
     }
 
-    // I'm using `Result` instead of `bool` because `false` represents failure in the C++ version,
-    // so it seemed more idiomatic to use `Result` in Rust.
     pub fn save(&mut self) -> Result<()> {
         todo!()
     }
 
-    // Same goes with using `Option` instead of `bool` here. `Option` being used because failure
-    // here is to be expected and only has one cause
-    pub fn get_no_tuples(&self, table: &str, no_tuples: &mut i32) -> Option<()> {
+    pub fn get_no_tuples(&self, table: &str) -> Result<i32> {
         todo!()
     }
 
@@ -27,7 +46,7 @@ impl Catalog {
         todo!()
     }
 
-    pub fn get_data_file(&self, table: &str) -> Option<String> {
+    pub fn get_data_file(&self, table: &str) -> Result<String> {
         todo!()
     }
 
@@ -35,12 +54,7 @@ impl Catalog {
         todo!()
     }
 
-    pub fn get_no_distinct(
-        &self,
-        table: &str,
-        attribute: &str,
-        no_distinct: &mut i32,
-    ) -> Option<()> {
+    pub fn get_no_distinct(&self, table: &str, attribute: &str) -> Result<i32> {
         todo!()
     }
 
@@ -52,11 +66,11 @@ impl Catalog {
         todo!()
     }
 
-    pub fn get_attributes(&self, table: &str) -> Option<Vec<String>> {
+    pub fn get_attributes(&self, table: &str) -> Result<Vec<String>> {
         todo!()
     }
 
-    pub fn get_schema(&self, table: &str) -> Option<Schema> {
+    pub fn get_schema(&self, table: &str) -> Result<Schema> {
         todo!()
     }
 
@@ -69,7 +83,7 @@ impl Catalog {
         todo!()
     }
 
-    pub fn drop_table(table: &str) -> Option<()> {
+    pub fn drop_table(table: &str) -> Result<()> {
         todo!()
     }
 }
