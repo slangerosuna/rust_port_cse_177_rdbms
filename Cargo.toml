@@ -11,10 +11,11 @@ itertools = "0.14.0"
 rusqlite = { version = "0.37.0", features = ["column_decltype"] }
 lalrpop-util = { version = "0.22.2", features = ["lexer", "unicode"] }
 logos = "0.15.1"
+anyhow = "1.0.100"
 
 [dev-dependencies]
 tempfile = "3.0"
 
 [[bin]]
 name = "test_sqlite"
-path = "src/bin/test_sqlite.rs"
+path = "src/bin/test-sqlite.rs"

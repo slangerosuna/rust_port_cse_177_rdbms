@@ -33,7 +33,7 @@ impl Schema {
         attribute_types: &[String],
         distincts: &[i32],
         no_tuples: i32,
-        f_path: &str,
+        f_path: String,
     ) -> Self {
         let attributes = izip!(attributes, attribute_types, distincts)
             .map(|(attr, attr_type, no_distinct)| -> Attribute {
@@ -59,12 +59,12 @@ impl Schema {
 
         Schema {
             no_tuples,
-            f_path: f_path.to_string(),
+            f_path: f_path,
             attributes,
         }
     }
 
-    pub fn new_no_attributes(no_tuples: i32, f_path: &str) -> Self {
+    pub fn new_no_attributes(no_tuples: i32, f_path: String) -> Self {
         Self::new(&[], &[], &[], no_tuples, f_path)
     }
 
@@ -73,10 +73,9 @@ impl Schema {
         attribute_types: &[String],
         distincts: &[i32],
     ) -> Self {
-        Self::new(attributes, attribute_types, distincts, 0, "")
+        Self::new(attributes, attribute_types, distincts, 0, "".to_string())
     }
 
-    /// Get number of attributes (matching C++ GetNumAtts)
     pub fn get_num_atts(&self) -> usize {
         self.attributes.len()
     }
@@ -106,16 +105,16 @@ impl Schema {
         self.f_path = f_path.to_string();
     }
 
-    pub fn append(&mut self, other: &Schema) -> Option<()> {
+    pub fn append(&mut self, other: &Schema) -> bool {
         if other
             .attributes
             .iter()
             .any(|attr| self.index_of(&attr.name).is_some())
         {
-            return None;
+            return false;
         }
         self.attributes.extend_from_slice(&other.attributes);
-        Some(())
+        true
     }
 
     pub fn index_of(&self, attribute: &str) -> Option<usize> {
@@ -134,29 +133,33 @@ impl Schema {
             .map(|index| self.attributes[index].no_distinct)
     }
 
-    pub fn set_distincts(&mut self, attribute: &str, no_distinct: i32) -> Option<()> {
-        self.index_of(attribute).map(|index| {
-            self.attributes[index].no_distinct = no_distinct;
-        })
+    pub fn set_distincts(&mut self, attribute: &str, no_distinct: i32) -> bool {
+        self.index_of(attribute)
+            .map(|index| {
+                self.attributes[index].no_distinct = no_distinct;
+            })
+            .is_some()
     }
 
-    pub fn rename_att(&mut self, old_name: &str, new_name: &str) -> Option<()> {
+    pub fn rename_att(&mut self, old_name: &str, new_name: &str) -> bool {
         if self.index_of(new_name).is_some() {
-            return None;
+            return false;
         }
-        self.index_of(old_name).map(|index| {
-            self.attributes[index].name = new_name.to_string();
-        })
+        self.index_of(old_name)
+            .map(|index| {
+                self.attributes[index].name = new_name.to_string();
+            })
+            .is_some()
     }
 
-    pub fn project(&mut self, atts_to_keep: &[i32]) -> Option<()> {
+    pub fn project(&mut self, atts_to_keep: &[i32]) -> bool {
         let new_attributes = atts_to_keep
             .iter()
             .map(|&i| self.attributes.get(i as usize))
             .collect::<Vec<_>>();
 
         if new_attributes.iter().any(|attr| attr.is_none()) {
-            return None;
+            return false;
         }
 
         self.attributes = new_attributes
@@ -164,7 +167,7 @@ impl Schema {
             .map(|attr| attr.unwrap().clone())
             .collect();
 
-        Some(())
+        true
     }
 }
 

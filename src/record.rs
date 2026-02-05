@@ -196,7 +196,9 @@ impl Record {
                 AttrType::String => {
                     let start = unsafe { other.data[i].string };
                     let string_data = str_buf_offset + start;
-                    self.data.push(AttrData { string: string_data });
+                    self.data.push(AttrData {
+                        string: string_data,
+                    });
                 }
             }
         }
