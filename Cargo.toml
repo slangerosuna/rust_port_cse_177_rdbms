@@ -12,10 +12,31 @@ rusqlite = { version = "0.37.0", features = ["column_decltype"] }
 lalrpop-util = { version = "0.22.2", features = ["lexer", "unicode"] }
 logos = "0.15.1"
 anyhow = "1.0.100"
+rand = "0.9.2"
 
 [dev-dependencies]
 tempfile = "3.0"
 
 [[bin]]
-name = "test_sqlite"
+name = "test-sqlite"
 path = "src/bin/test-sqlite.rs"
+
+[[bin]]
+name = "test-phase-1"
+path = "src/bin/test-phase-1.rs"
+
+[[bin]]
+name = "test-phase-2"
+path = "src/bin/test-phase-2.rs"
+
+[[bin]]
+name = "test-phase-3"
+path = "src/bin/test-phase-3.rs"
+
+[[bin]]
+name = "test-phase-3-data-loader"
+path = "src/bin/test-phase-3-data-loader.rs"
+
+[[bin]]
+name = "test-query"
+path = "src/bin/test-query.rs"

@@ -17,7 +17,7 @@ pub struct Catalog {
 }
 
 impl Catalog {
-    pub fn new(filename: String) -> Result<Self> {
+    pub fn open(filename: String) -> Result<Self> {
         let mut conn = Connection::open(&filename)?;
         let mut table_schema = HashMap::new();
 
@@ -188,11 +188,11 @@ impl Catalog {
 
     pub fn create_table(
         &mut self,
-        table: String,
+        table: &String,
         attributes: &[String],
         attribute_types: &[String],
     ) -> bool {
-        if self.table_schema.get(&table).is_some() {
+        if self.table_schema.get(table).is_some() {
             return false;
         }
 
@@ -206,7 +206,7 @@ impl Catalog {
         }
 
         self.table_schema.insert(
-            table,
+            table.clone(),
             Schema::from_attributes(attributes, attribute_types, &distincts),
         );
 
