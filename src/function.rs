@@ -2,6 +2,8 @@ use crate::record::*;
 use crate::schema::*;
 use crate::types::*;
 
+use anyhow::{Result, anyhow};
+
 #[derive(Debug, Clone)]
 pub struct ArithmeticOp {
     pub op_type: ArithOp,
@@ -63,7 +65,7 @@ impl Function {
                     });
                     Ok(Type::Float)
                 }
-                _ => Err(Error::General),
+                _ => Err(anyhow!("Expected Type::Integer or Type::Float")),
             }
         } else if parse_tree.left_operator.is_none() && parse_tree.right.is_none() {
             let operand = parse_tree.left_operand.as_ref().unwrap();
@@ -75,13 +77,13 @@ impl Function {
                         let attr_type = schema.find_type(attr_name).unwrap_or(Type::Integer);
 
                         if matches!(attr_type, Type::String) {
-                            return Err(Error::General);
+                            return Err(anyhow!(""));
                         }
 
                         let op_type = match attr_type {
                             Type::Integer => ArithOp::PushInt,
                             Type::Float => ArithOp::PushFlt,
-                            _ => return Err(Error::General),
+                            _ => return Err(anyhow!("Expected Type::Integer or Type::Float")),
                         };
 
                         self.operations.push(ArithmeticOp {
@@ -92,11 +94,11 @@ impl Function {
 
                         Ok(attr_type)
                     } else {
-                        Err(Error::General)
+                        Err(anyhow!(""))
                     }
                 }
                 NodeType::Integer => {
-                    let value = operand.value.parse::<i64>().map_err(|_| Error::General)?;
+                    let value = operand.value.parse::<i64>().map_err(|_| anyhow!(""))?;
                     self.operations.push(ArithmeticOp {
                         op_type: ArithOp::PushInt,
                         record_input: None,
@@ -106,7 +108,7 @@ impl Function {
                     Ok(Type::Integer)
                 }
                 NodeType::Float => {
-                    let value = operand.value.parse::<f64>().map_err(|_| Error::General)?;
+                    let value = operand.value.parse::<f64>().map_err(|_| anyhow!(""))?;
                     self.operations.push(ArithmeticOp {
                         op_type: ArithOp::PushFlt,
                         record_input: None,
@@ -128,7 +130,7 @@ impl Function {
                         '-' => ArithOp::IntSub,
                         '*' => ArithOp::IntMul,
                         '/' => ArithOp::IntDiv,
-                        _ => return Err(Error::General),
+                        _ => return Err(anyhow!("Excpected ArithOp")),
                     };
 
                     self.operations.push(ArithmeticOp {
@@ -161,7 +163,7 @@ impl Function {
                         '-' => ArithOp::FltSub,
                         '*' => ArithOp::FltMul,
                         '/' => ArithOp::FltDiv,
-                        _ => return Err(Error::General),
+                        _ => return Err(anyhow!("Expected ArithOp")),
                     };
 
                     self.operations.push(ArithmeticOp {
@@ -186,12 +188,12 @@ impl Function {
                         if let Some(MappedAttrData::Integer(val)) = record.get_column(record_idx) {
                             *val
                         } else {
-                            return Err(Error::General);
+                            return Err(anyhow!(""));
                         }
                     } else if let Some(FunctionValue::Integer(val)) = &op.literal_value {
                         *val
                     } else {
-                        return Err(Error::General);
+                        return Err(anyhow!(""));
                     };
                     stack.push(FunctionValue::Integer(value));
                 }
@@ -200,12 +202,12 @@ impl Function {
                         if let Some(MappedAttrData::Float(val)) = record.get_column(record_idx) {
                             *val
                         } else {
-                            return Err(Error::General);
+                            return Err(anyhow!(""));
                         }
                     } else if let Some(FunctionValue::Float(val)) = &op.literal_value {
                         *val
                     } else {
-                        return Err(Error::General);
+                        return Err(anyhow!(""));
                     };
                     stack.push(FunctionValue::Float(value));
                 }
@@ -213,7 +215,7 @@ impl Function {
                     if let Some(FunctionValue::Integer(val)) = stack.pop() {
                         stack.push(FunctionValue::Float(val as f64));
                     } else {
-                        return Err(Error::General);
+                        return Err(anyhow!(""));
                     }
                 }
                 ArithOp::ToFlt2Down => {
@@ -222,24 +224,24 @@ impl Function {
                         if let FunctionValue::Integer(val) = stack[len - 2] {
                             stack[len - 2] = FunctionValue::Float(val as f64);
                         } else {
-                            return Err(Error::General);
+                            return Err(anyhow!(""));
                         }
                     } else {
-                        return Err(Error::General);
+                        return Err(anyhow!(""));
                     }
                 }
                 ArithOp::IntNeg => {
                     if let Some(FunctionValue::Integer(val)) = stack.pop() {
                         stack.push(FunctionValue::Integer(-val));
                     } else {
-                        return Err(Error::General);
+                        return Err(anyhow!(""));
                     }
                 }
                 ArithOp::FltNeg => {
                     if let Some(FunctionValue::Float(val)) = stack.pop() {
                         stack.push(FunctionValue::Float(-val));
                     } else {
-                        return Err(Error::General);
+                        return Err(anyhow!(""));
                     }
                 }
                 ArithOp::IntAdd | ArithOp::IntSub | ArithOp::IntMul | ArithOp::IntDiv => {
@@ -252,14 +254,15 @@ impl Function {
                                 ArithOp::IntSub => l - r,
                                 ArithOp::IntMul => l * r,
                                 ArithOp::IntDiv => l / r,
+
                                 _ => unreachable!(),
                             };
                             stack.push(FunctionValue::Integer(result));
                         } else {
-                            return Err(Error::General);
+                            return Err(anyhow!(""));
                         }
                     } else {
-                        return Err(Error::General);
+                        return Err(anyhow!(""));
                     }
                 }
                 ArithOp::FltAdd | ArithOp::FltSub | ArithOp::FltMul | ArithOp::FltDiv => {
@@ -274,10 +277,10 @@ impl Function {
                             };
                             stack.push(FunctionValue::Float(result));
                         } else {
-                            return Err(Error::General);
+                            return Err(anyhow!(""));
                         }
                     } else {
-                        return Err(Error::General);
+                        return Err(anyhow!(""));
                     }
                 }
             }
@@ -286,7 +289,7 @@ impl Function {
         if stack.len() == 1 {
             Ok(stack.into_iter().next().unwrap())
         } else {
-            Err(Error::General)
+            Err(anyhow!(""))
         }
     }
 

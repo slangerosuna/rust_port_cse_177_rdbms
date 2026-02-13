@@ -5,25 +5,42 @@ use std::rc::Rc;
 grammar;
 
 pub Query: Query = {
-    <l:"SELECT"> <sa:SelectAtts> <f:"FROM"> <t:Tables> <w:"WHERE"> <and:AndList> => {
-        let mut q = Query::empty();
-        q.tables = t;
-        q.predicate = Some(and);
-        q.grouping_atts = None;
-        q.atts_to_select = sa.0;
-        q.final_function = sa.1;
-        q.distinct_atts = sa.2;
-        q
-    },
-
     <l:"SELECT"> <sa:SelectAtts> <f:"FROM"> <t:Tables> <w:"WHERE"> <and:AndList> <g:"GROUP"> <by:"BY"> <atts:Atts> => {
         let mut q = Query::empty();
+
         q.tables = t;
         q.predicate = Some(and);
         q.grouping_atts = Some(atts);
         q.atts_to_select = sa.0;
         q.final_function = sa.1;
         q.distinct_atts = sa.2;
+
+        q
+    },
+
+    <l:"SELECT"> <sa:SelectAtts> <f:"FROM"> <t:Tables> <w:"WHERE"> <and:AndList> => {
+        let mut q = Query::empty();
+
+        q.tables = t;
+        q.predicate = Some(and);
+        q.grouping_atts = None;
+        q.atts_to_select = sa.0;
+        q.final_function = sa.1;
+        q.distinct_atts = sa.2;
+
+        q
+    },
+
+    <l: "SELECT"> <sa: SelectAtts> <f: "FROM"> <t: Tables> => {
+        let mut q = Query::empty();
+
+        q.tables = t;
+        q.predicate = None;
+        q.grouping_atts = None;
+        q.atts_to_select = sa.0;
+        q.final_function = sa.1;
+        q.distinct_atts = sa.2;
+
         q
     }
 };

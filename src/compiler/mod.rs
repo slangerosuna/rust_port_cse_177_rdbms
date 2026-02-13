@@ -2,7 +2,7 @@ use crate::catalog::Catalog;
 use crate::comparison::Comparison;
 use crate::relop::*;
 use crate::schema::Schema;
-use crate::types::Result;
+use anyhow::{Result, anyhow};
 use lalrpop_util::*;
 use logos::Logos;
 use std::collections::HashMap;
@@ -37,8 +37,7 @@ impl<'a> QueryCompiler<'a> {
         predicate: Option<&AndList>,
         grouping_atts: Option<&[String]>,
         distinct_atts: bool,
-        query_tree: &mut QueryExecutionTree,
-    ) -> Result<()> {
+    ) -> Result<QueryExecutionTree> {
         let mut table_operators: HashMap<String, Box<dyn RelationalOp>> = HashMap::new();
         let mut table_schemas: HashMap<String, Schema> = HashMap::new();
 
@@ -83,9 +82,10 @@ impl<'a> QueryCompiler<'a> {
             root_op = Box::new(Sum::new(schema_in, schema_out, root_op));
         }
 
+        let mut query_tree = QueryExecutionTree::new();
         query_tree.set_root(root_op);
 
-        Ok(())
+        Ok(query_tree)
     }
 
     fn apply_selections(
@@ -159,20 +159,20 @@ impl<'a> QueryCompiler<'a> {
     }
 }
 
-pub fn parse_input(input: &str) -> std::result::Result<Query, String> {
+pub fn parse_input(input: &str) -> Result<Query> {
     let mut lex = Token::lexer(input).spanned();
     let mut tokens = Vec::new();
     while let Some((tok, span)) = lex.next() {
         let (start, end) = (span.start, span.end);
         match tok {
             Ok(Token::Error) => {
-                return Err(format!("Lex error at {}..{}", start, end));
+                return Err(anyhow!("Lex error at {}..{}", start, end));
             }
             Ok(token) => {
                 tokens.push((start, token, end));
             }
             Err(_) => {
-                return Err(format!("Lex error at {}..{}", start, end));
+                return Err(anyhow!("Lex error at {}..{}", start, end));
             }
         }
     }
@@ -180,19 +180,17 @@ pub fn parse_input(input: &str) -> std::result::Result<Query, String> {
     let parser = QueryParser::new();
     match parser.parse(tokens.into_iter()) {
         Ok(q) => Ok(q),
-        Err(e) => Err(format!("Parse error: {:?}", e)),
+        Err(e) => Err(anyhow!("Parse error: {:?}", e)),
     }
 }
 
 pub fn compile_query(
     input: &str,
     catalog: &Catalog,
-) -> std::result::Result<QueryExecutionTree, String> {
+) -> Result<QueryExecutionTree> {
     let query = parse_input(input)?;
     let compiler = QueryCompiler::new(catalog);
-    let mut query_tree = QueryExecutionTree::new();
-
-    compiler
+    let query_tree = compiler
         .compile(
             &query.tables,
             query.atts_to_select.as_deref(),
@@ -200,9 +198,8 @@ pub fn compile_query(
             query.predicate.as_ref(),
             query.grouping_atts.as_deref(),
             query.distinct_atts,
-            &mut query_tree,
         )
-        .map_err(|e| format!("Compilation error: {}", e))?;
+        .map_err(|e| anyhow!("Compilation error: {}", e))?;
 
     Ok(query_tree)
 }

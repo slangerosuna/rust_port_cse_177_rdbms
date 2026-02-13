@@ -79,7 +79,7 @@ fn main() -> Result<()> {
         println!("CREATE TABLE {table_name} OK");
     }
 
-    catalog.save();
+    catalog.save()?;
     println!("{catalog}");
 
     println!("tables");
@@ -108,7 +108,7 @@ fn main() -> Result<()> {
         let schema = catalog.get_schema(&table_name).unwrap();
         println!("{schema}");
 
-        for j in 0..2 {
+        for _ in 0..2 {
             let s = rng.random_range(0..((r + 1) * no_atts));
             let att_name = format!("A_{r}_{s}");
 

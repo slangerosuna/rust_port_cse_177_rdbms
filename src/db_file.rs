@@ -5,6 +5,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
+use anyhow::{Result, anyhow};
+
 /// Page size constant - 128KB as defined in C++ Config.h
 const PAGE_SIZE: usize = 131072;
 
@@ -140,7 +142,7 @@ impl DBFile {
             .read(true)
             .truncate(true)
             .open(path)
-            .map_err(|_| Error::General)?;
+            .map_err(|_| anyhow!(""))?;
 
         self.file = Some(file);
         self.current_page_pos = 0;
@@ -158,7 +160,7 @@ impl DBFile {
             .read(true)
             .write(true)
             .open(path)
-            .map_err(|_| Error::General)?;
+            .map_err(|_| anyhow!(""))?;
 
         self.file = Some(file);
         self.current_page_pos = 0;
@@ -214,7 +216,7 @@ impl DBFile {
             self.current_page = Page::new();
 
             if !self.current_page.append(record) {
-                return Err(Error::General);
+                return Err(anyhow!(""));
             }
         }
         Ok(())
@@ -223,7 +225,7 @@ impl DBFile {
     pub fn load(&mut self, schema: &Schema, text_file_path: &str) -> Result<()> {
         self.schema = Some(schema.clone());
 
-        let file = std::fs::File::open(text_file_path).map_err(|_| Error::General)?;
+        let file = std::fs::File::open(text_file_path).map_err(|_| anyhow!(""))?;
         let mut reader = BufReader::new(file);
 
         self.current_page_pos = 0;
@@ -243,18 +245,18 @@ impl DBFile {
     }
 
     fn load_page(&mut self, page_num: u64) -> Result<()> {
-        let file = self.file.as_mut().ok_or(Error::General)?;
-        let schema = self.schema.as_ref().ok_or(Error::General)?;
+        let file = self.file.as_mut().ok_or(anyhow!(""))?;
+        let schema = self.schema.as_ref().ok_or(anyhow!(""))?;
 
         file.seek(SeekFrom::Start(page_num * PAGE_SIZE as u64))
-            .map_err(|_| Error::General)?;
+            .map_err(|_| anyhow!(""))?;
 
         let mut buffer = vec![0u8; PAGE_SIZE];
-        let bytes_read = file.read(&mut buffer).map_err(|_| Error::General)?;
+        let bytes_read = file.read(&mut buffer).map_err(|_| anyhow!(""))?;
 
         if bytes_read == 0 {
             self.current_page = Page::new();
-            return Err(Error::General);
+            return Err(anyhow!(""));
         }
 
         self.current_page.from_binary(&buffer, schema)?;
@@ -262,14 +264,14 @@ impl DBFile {
     }
 
     fn write_current_page(&mut self) -> Result<()> {
-        let file = self.file.as_mut().ok_or(Error::General)?;
+        let file = self.file.as_mut().ok_or(anyhow!(""))?;
 
         file.seek(SeekFrom::Start(self.current_page_pos * PAGE_SIZE as u64))
-            .map_err(|_| Error::General)?;
+            .map_err(|_| anyhow!(""))?;
 
         let page_data = self.current_page.to_binary();
-        file.write_all(&page_data).map_err(|_| Error::General)?;
-        file.flush().map_err(|_| Error::General)?;
+        file.write_all(&page_data).map_err(|_| anyhow!(""))?;
+        file.flush().map_err(|_| anyhow!(""))?;
 
         Ok(())
     }

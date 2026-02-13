@@ -4,7 +4,7 @@ use crate::comparison::Comparison;
 use crate::db_file::DBFile;
 use crate::record::Record;
 use crate::schema::Schema;
-use crate::types::Result;
+use anyhow::Result;
 use std::fmt;
 use std::rc::Rc;
 
