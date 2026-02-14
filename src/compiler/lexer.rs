@@ -51,11 +51,16 @@ pub enum Token {
     #[regex(r"[A-Za-z][A-Za-z0-9_]*", |lex| lex.slice().to_string())]
     Name(String),
 
-    #[regex(r"'([^'\\]|\\.)*'", |lex| {
+    #[regex(r"'([^'\\\n]|\\.)*'", |lex| {
         let s = lex.slice();
         let inner = &s[1..s.len()-1];
+
         inner.replace("\\'", "'")
              .replace("\\\\", "\\")
+             .replace("\\n", "\n")
+             .replace("\\r", "\r")
+             .replace("\\0", "\0")
+             .replace("\\\"", "\"")
     })]
     Str(String),
 

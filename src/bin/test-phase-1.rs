@@ -52,10 +52,20 @@ fn main() -> Result<()> {
             .collect::<Vec<String>>();
 
         println!("CREATE TABLE {table_name}");
-        println!("{}", atts.iter().map(Clone::clone).reduce(|acc, att| format!("{acc} {att}")).unwrap());
         println!(
             "{}",
-            types.iter().map(Clone::clone).reduce(|acc, type_| format!("{acc} {type_}")).unwrap()
+            atts.iter()
+                .map(Clone::clone)
+                .reduce(|acc, att| format!("{acc} {att}"))
+                .unwrap()
+        );
+        println!(
+            "{}",
+            types
+                .iter()
+                .map(Clone::clone)
+                .reduce(|acc, type_| format!("{acc} {type_}"))
+                .unwrap()
         );
 
         if !catalog.create_table(&table_name, &atts, &types) {
@@ -103,7 +113,13 @@ fn main() -> Result<()> {
         println!("{table_name} path = {path}");
 
         let atts = catalog.get_attributes(&table_name).unwrap();
-        println!("{}", atts.iter().map(Clone::clone).reduce(|acc, att| format!("{acc} {att}")).unwrap());
+        println!(
+            "{}",
+            atts.iter()
+                .map(Clone::clone)
+                .reduce(|acc, att| format!("{acc} {att}"))
+                .unwrap()
+        );
 
         let schema = catalog.get_schema(&table_name).unwrap();
         println!("{schema}");

@@ -182,22 +182,22 @@ impl OrderMaker {
             let cmp = match att_type {
                 Type::Integer => {
                     let left_val = match left_data {
-                        MappedAttrData::Integer(v) => *v,
+                        MappedAttrData::Integer(v) => v,
                         _ => panic!("type mismatch"),
                     };
                     let right_val = match right_data {
-                        MappedAttrData::Integer(v) => *v,
+                        MappedAttrData::Integer(v) => v,
                         _ => panic!("type mismatch"),
                     };
                     left_val.cmp(&right_val)
                 }
                 Type::Float => {
                     let left_val = match left_data {
-                        MappedAttrData::Float(v) => *v,
+                        MappedAttrData::Float(v) => v,
                         _ => panic!("type mismatch"),
                     };
                     let right_val = match right_data {
-                        MappedAttrData::Float(v) => *v,
+                        MappedAttrData::Float(v) => v,
                         _ => panic!("type mismatch"),
                     };
                     left_val.partial_cmp(&right_val).unwrap_or(Ordering::Equal)
@@ -244,22 +244,22 @@ impl OrderMaker {
             let cmp = match (left_att_type, right_att_type) {
                 (Type::Integer, Type::Integer) => {
                     let left_val = match left_data {
-                        MappedAttrData::Integer(v) => *v,
+                        MappedAttrData::Integer(v) => v,
                         _ => panic!("type mismatch"),
                     };
                     let right_val = match right_data {
-                        MappedAttrData::Integer(v) => *v,
+                        MappedAttrData::Integer(v) => v,
                         _ => panic!("type mismatch"),
                     };
                     left_val.cmp(&right_val)
                 }
                 (Type::Float, Type::Float) => {
                     let left_val = match left_data {
-                        MappedAttrData::Float(v) => *v,
+                        MappedAttrData::Float(v) => v,
                         _ => panic!("type mismatch"),
                     };
                     let right_val = match right_data {
-                        MappedAttrData::Float(v) => *v,
+                        MappedAttrData::Float(v) => v,
                         _ => panic!("type mismatch"),
                     };
                     left_val.partial_cmp(&right_val).unwrap_or(Ordering::Equal)

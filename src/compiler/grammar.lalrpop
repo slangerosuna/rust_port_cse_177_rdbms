@@ -1,180 +1,23 @@
-use crate::compiler::ast::*;
-use crate::compiler::lexer::Token;
-use std::rc::Rc;
+use crate::*;
+use crate::compiler::Token;
 
 grammar;
 
-pub Query: Query = {
-    <l:"SELECT"> <sa:SelectAtts> <f:"FROM"> <t:Tables> <w:"WHERE"> <and:AndList> <g:"GROUP"> <by:"BY"> <atts:Atts> => {
-        let mut q = Query::empty();
+pub ArithExpr: ArithExpr = {
+#[precedence(level="0")]
+  "(" <e: ArithExpr> ")" => e,
+  <n: Name> => ArithExpr::Load(n),
+  <i: Integer> => ArithExpr::IntLit(i.parse().unwrap()),
+  <f: Float> => ArithExpr::FltLit(f.parse().unwrap()),
 
-        q.tables = t;
-        q.predicate = Some(and);
-        q.grouping_atts = Some(atts);
-        q.atts_to_select = sa.0;
-        q.final_function = sa.1;
-        q.distinct_atts = sa.2;
+#[precedence(level="1")] #[assoc(side="left")]
+  <r:ArithExpr> "/" <l:ArithExpr> => ArithExpr::Div(Box::new(r), Box::new(l)),
+  <r:ArithExpr> "*" <l:ArithExpr> => ArithExpr::Mul(Box::new(r), Box::new(l)),
 
-        q
-    },
-
-    <l:"SELECT"> <sa:SelectAtts> <f:"FROM"> <t:Tables> <w:"WHERE"> <and:AndList> => {
-        let mut q = Query::empty();
-
-        q.tables = t;
-        q.predicate = Some(and);
-        q.grouping_atts = None;
-        q.atts_to_select = sa.0;
-        q.final_function = sa.1;
-        q.distinct_atts = sa.2;
-
-        q
-    },
-
-    <l: "SELECT"> <sa: SelectAtts> <f: "FROM"> <t: Tables> => {
-        let mut q = Query::empty();
-
-        q.tables = t;
-        q.predicate = None;
-        q.grouping_atts = None;
-        q.atts_to_select = sa.0;
-        q.final_function = sa.1;
-        q.distinct_atts = sa.2;
-
-        q
-    }
-};
-
-SelectAtts: (Option<Vec<String>>, Option<Rc<FuncOperator>>, bool) = {
-    <func:Function> <comma:","> <atts:Atts> => {
-        (Some(atts), Some(func), false)
-    },
-
-    <func:Function> => {
-        (None, Some(func), false)
-    },
-
-    <atts:Atts> => {
-        (Some(atts), None, false)
-    },
-
-    <d:"DISTINCT"> <atts:Atts> => {
-        (Some(atts), None, true)
-    }
-};
-
-Function: Rc<FuncOperator> = {
-    <sum:"SUM"> <lp:"("> <ce:CompoundExp> <rp:")"> => Rc::new(ce)
-};
-
-Atts: Vec<String> = {
-    <n:Name> => vec![n],
-
-    <atts:Atts> <comma:","> <n:Name> => {
-        let mut v = atts;
-        v.push(n);
-        v
-    }
-};
-
-Tables: Vec<Table> = {
-    <n:Name> => vec![Table { name: n }],
-
-    <ts:Tables> <comma:","> <n:Name> => {
-        let mut v = ts;
-        v.push(Table { name: n });
-        v
-    }
-};
-
-CompoundExp: FuncOperator = {
-    <left:SimpleExp> <op:Op> <right:CompoundExp> => {
-        let left_op = FuncOperator {
-            left_operand: Some(left),
-            left_operator: None,
-            op: None,
-            right: None,
-        };
-        FuncOperator {
-            left_operand: None,
-            left_operator: Some(Rc::new(left_op)),
-            op: Some(op),
-            right: Some(Rc::new(right)),
-        }
-    },
-
-    <lp:"("> <mid:CompoundExp> <rp:")"> <op:Op> <right:CompoundExp> => {
-        FuncOperator {
-            left_operand: None,
-            left_operator: Some(Rc::new(mid)),
-            op: Some(op),
-            right: Some(Rc::new(right)),
-        }
-    },
-
-    <lp:"("> <mid:CompoundExp> <rp:")"> => mid,
-
-    <s:SimpleExp> => {
-        FuncOperator {
-            left_operand: Some(s),
-            left_operator: None,
-            op: None,
-            right: None,
-        }
-    },
-
-    <minus:"-"> <c:CompoundExp> => {
-        FuncOperator {
-            left_operand: None,
-            left_operator: Some(Rc::new(c)),
-            op: Some(BinOp::Neg),
-            right: None,
-        }
-    }
-};
-
-Op: BinOp = {
-    <minus:"-"> => BinOp::Sub,
-    <plus:"+"> => BinOp::Add,
-    <star:"*"> => BinOp::Mul,
-    <slash:"/"> => BinOp::Div,
-};
-
-AndList: AndList = {
-    <c:Condition> <and:"AND"> <rest:AndList> => {
-        AndList { left: c, right_and: Some(Box::new(rest)) }
-    },
-
-    <c:Condition> => {
-        AndList { left: c, right_and: None }
-    }
-};
-
-Condition: Condition = {
-    <l:Literal> <cmp:BoolComp> <r:Literal> => {
-        Condition { cmp: ComparisonOp { code: cmp, left: l, right: r } }
-    }
-};
-
-BoolComp: CompCode = {
-    <lt:"<"> => CompCode::LessThan,
-    <gt:">"> => CompCode::GreaterThan,
-    <eq:"="> => CompCode::Equals,
-};
-
-Literal: Operand = {
-    <s:Str> => Operand::String(s),
-    <f:Float> => Operand::Float(f),
-    <i:Integer> => Operand::Integer(i),
-    <n:Name> => Operand::Name(n),
-};
-
-SimpleExp: FuncOperand = {
-    <f:Float> => FuncOperand { code: OperandCode::Float, value: f },
-    <i:Integer> => FuncOperand { code: OperandCode::Integer, value: i },
-    <n:Name> => FuncOperand { code: OperandCode::Name, value: n },
-};
-
+#[precedence(level="2")] #[assoc(side="left")]
+  <r:ArithExpr> "+" <l:ArithExpr> => ArithExpr::Add(Box::new(r), Box::new(l)),
+  <r:ArithExpr> "-" <l:ArithExpr> => ArithExpr::Sub(Box::new(r), Box::new(l)),
+}
 
 extern {
     type Location = usize;
@@ -188,8 +31,8 @@ extern {
         "SUM" => Token::Sum,
         "AND" => Token::And,
         "GROUP" => Token::Group,
-        "BY" => Token::By,
         "DISTINCT" => Token::Distinct,
+        "BY" => Token::By,
 
         // Operators and punctuation
         "(" => Token::LParen,

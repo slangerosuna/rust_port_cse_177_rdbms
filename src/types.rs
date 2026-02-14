@@ -33,26 +33,6 @@ pub enum CompOp {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum ArithOp {
-    PushInt,
-    // I changed it to Flt instead of Dbl in the C++ version because the corresponding
-    // `Type` is `Type::Float`, so it feels internally inconsistent to use `Dbl` here.
-    PushFlt,
-    ToFlt,
-    ToFlt2Down,
-    IntNeg,
-    IntSub,
-    IntAdd,
-    IntDiv,
-    IntMul,
-    FltNeg,
-    FltSub,
-    FltAdd,
-    FltDiv,
-    FltMul,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FileType {
     Heap,
     Sorted,

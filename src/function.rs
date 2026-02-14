@@ -1,326 +1,233 @@
-use crate::record::*;
-use crate::schema::*;
-use crate::types::*;
+use crate::*;
 
-use anyhow::{Result, anyhow};
-
-#[derive(Debug, Clone)]
-pub struct ArithmeticOp {
-    pub op_type: ArithOp,
-    pub record_input: Option<usize>,
-    pub literal_value: Option<FunctionValue>,
+enum Value {
+    IntLit(i64),
+    FltLit(f64),
+    Load(i32),
 }
 
-#[derive(Debug, Clone)]
-pub enum FunctionValue {
-    Integer(i64),
-    Float(f64),
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+enum OpCode {
+    Push,
+    ToFlt,
+    ToFlt2Down,
+
+    IntNeg,
+    IntSub,
+    IntAdd,
+    IntDiv,
+    IntMul,
+
+    FltNeg,
+    FltSub,
+    FltAdd,
+    FltDiv,
+    FltMul,
 }
 
-#[derive(Debug, Clone)]
+pub enum ArithExpr {
+    IntLit(i64),
+    FltLit(f64),
+    Load(String),
+
+    Neg(Box<ArithExpr>),
+    Sub(Box<ArithExpr>, Box<ArithExpr>),
+    Add(Box<ArithExpr>, Box<ArithExpr>),
+    Div(Box<ArithExpr>, Box<ArithExpr>),
+    Mul(Box<ArithExpr>, Box<ArithExpr>),
+}
+
+impl ArithExpr {
+    fn compile(&self, schema: &Schema, ops: &mut Vec<OpCode>, values: &mut Vec<Value>, max_depth: &mut usize, depth: &mut usize) -> Type {
+        fn bin_op_match_arm(
+            lhs: &Box<ArithExpr>,
+            rhs: &Box<ArithExpr>,
+
+            int_op: OpCode,
+            flt_op: OpCode,
+
+            schema: &Schema,
+            ops: &mut Vec<OpCode>,
+            values: &mut Vec<Value>,
+            max_depth: &mut usize,
+            depth: &mut usize,
+        ) -> Type {
+            let lhs_type = lhs.compile(schema, ops, values, max_depth, depth);
+            let rhs_type = rhs.compile(schema, ops, values, max_depth, depth);
+
+            *depth -= 1;
+
+            match (lhs_type, rhs_type) {
+                (Type::Integer, Type::Integer) => {
+                    ops.push(int_op);
+                    Type::Integer
+                }
+                (Type::Integer, Type::Float)
+                | (Type::Float, Type::Integer)
+                | (Type::Float, Type::Float) => {
+                    if lhs_type == Type::Integer {
+                        ops.push(OpCode::ToFlt2Down);
+                    } else if rhs_type == Type::Integer {
+                        ops.push(OpCode::ToFlt);
+                    }
+
+                    ops.push(flt_op);
+                    Type::Float
+                }
+                _ => panic!(),
+            }
+        }
+
+        match self {
+            ArithExpr::IntLit(i) => {
+                *depth += 1;
+                if *depth > *max_depth {
+                    *max_depth = *depth;
+                }
+
+                values.push(Value::IntLit(*i));
+                ops.push(OpCode::Push);
+
+                Type::Integer
+            }
+            ArithExpr::FltLit(f) => {
+                *depth += 1;
+                if *depth > *max_depth {
+                    *max_depth = *depth;
+                }
+
+                values.push(Value::FltLit(*f));
+                ops.push(OpCode::Push);
+
+                Type::Float
+            }
+            ArithExpr::Load(name) => {
+                *depth += 1;
+                if *depth > *max_depth {
+                    *max_depth = *depth;
+                }
+
+                let index = schema.index_of(&name).unwrap();
+
+                values.push(Value::Load(index as i32));
+                let type_ = schema.get_atts()[index].type_;
+
+                ops.push(OpCode::Push);
+
+                type_
+            }
+            ArithExpr::Neg(parent) => {
+                let child_type = parent.compile(schema, ops, values, max_depth, depth);
+
+                ops.push(match child_type {
+                    Type::Integer => OpCode::IntNeg,
+                    Type::Float => OpCode::FltNeg,
+                    _ => panic!(),
+                });
+
+                child_type
+            }
+
+            ArithExpr::Sub(lhs, rhs) => bin_op_match_arm(lhs, rhs, OpCode::IntSub, OpCode::FltSub, schema, ops, values, max_depth, depth),
+            ArithExpr::Add(lhs, rhs) => bin_op_match_arm(lhs, rhs, OpCode::IntAdd, OpCode::FltAdd, schema, ops, values, max_depth, depth),
+            ArithExpr::Mul(lhs, rhs) => bin_op_match_arm(lhs, rhs, OpCode::IntMul, OpCode::FltMul, schema, ops, values, max_depth, depth),
+            ArithExpr::Div(lhs, rhs) => bin_op_match_arm(lhs, rhs, OpCode::IntDiv, OpCode::FltDiv, schema, ops, values, max_depth, depth),
+        }
+    }
+}
+
 pub struct Function {
-    operations: Vec<ArithmeticOp>,
-    returns_int: bool,
+    ops: Vec<OpCode>,
+    values: Vec<Value>,
+    output_type: Type,
+    max_depth: usize,
 }
 
 impl Function {
-    pub fn new() -> Self {
+    fn new(root_expr: &ArithExpr, schema: &Schema) -> Self {
+        let mut ops = Vec::new();
+        let mut values = Vec::new();
+        let mut max_depth = 0;
+
+        let output_type = root_expr.compile(schema, &mut ops, &mut values, &mut max_depth, &mut 0);
+
         Function {
-            operations: Vec::new(),
-            returns_int: false,
+            ops,
+            values,
+            output_type,
+            max_depth,
         }
     }
 
-    pub fn grow_from_parse_tree(
-        &mut self,
-        parse_tree: &FuncOperator,
-        schema: &Schema,
-    ) -> Result<()> {
-        self.operations.clear();
-        let result_type = self.recursively_build(parse_tree, schema)?;
-        self.returns_int = matches!(result_type, Type::Integer);
-        Ok(())
-    }
-
-    fn recursively_build(&mut self, parse_tree: &FuncOperator, schema: &Schema) -> Result<Type> {
-        if parse_tree.right.is_none() && parse_tree.left_operand.is_none() && parse_tree.code == '-'
-        {
-            let operand_type =
-                self.recursively_build(parse_tree.left_operator.as_ref().unwrap(), schema)?;
-
-            match operand_type {
-                Type::Integer => {
-                    self.operations.push(ArithmeticOp {
-                        op_type: ArithOp::IntNeg,
-                        record_input: None,
-                        literal_value: None,
-                    });
-                    Ok(Type::Integer)
-                }
-                Type::Float => {
-                    self.operations.push(ArithmeticOp {
-                        op_type: ArithOp::FltNeg,
-                        record_input: None,
-                        literal_value: None,
-                    });
-                    Ok(Type::Float)
-                }
-                _ => Err(anyhow!("Expected Type::Integer or Type::Float")),
+    fn eval(&self, record: &Record) -> MappedAttrData {
+        let mut values = self.values.iter().map(|v| unsafe {
+            match v {
+                Value::IntLit(i) => AttrData { integer: *i },
+                Value::FltLit(f) => AttrData { float: *f },
+                Value::Load(att_idx) => record.get_raw_attr_data_unchecked(*att_idx as usize),
             }
-        } else if parse_tree.left_operator.is_none() && parse_tree.right.is_none() {
-            let operand = parse_tree.left_operand.as_ref().unwrap();
+        });
 
-            match &operand.code {
-                NodeType::Name => {
-                    let attr_name = &operand.value;
-                    if let Some(attr_index) = schema.index_of(attr_name) {
-                        let attr_type = schema.find_type(attr_name).unwrap_or(Type::Integer);
+        let mut stack = Vec::with_capacity(self.max_depth);
 
-                        if matches!(attr_type, Type::String) {
-                            return Err(anyhow!(""));
-                        }
+        for op in &self.ops {
+            macro_rules! bin_op {
+                ($float_or_int:ident, $op:tt) => ({
+                    let idx = stack.len() - 2;
 
-                        let op_type = match attr_type {
-                            Type::Integer => ArithOp::PushInt,
-                            Type::Float => ArithOp::PushFlt,
-                            _ => return Err(anyhow!("Expected Type::Integer or Type::Float")),
-                        };
+                    let rhs = stack.pop().unwrap();
+                    let lhs = stack[idx];
 
-                        self.operations.push(ArithmeticOp {
-                            op_type,
-                            record_input: Some(attr_index),
-                            literal_value: None,
-                        });
-
-                        Ok(attr_type)
-                    } else {
-                        Err(anyhow!(""))
-                    }
-                }
-                NodeType::Integer => {
-                    let value = operand.value.parse::<i64>().map_err(|_| anyhow!(""))?;
-                    self.operations.push(ArithmeticOp {
-                        op_type: ArithOp::PushInt,
-                        record_input: None,
-                        literal_value: Some(FunctionValue::Integer(value)),
-                    });
-
-                    Ok(Type::Integer)
-                }
-                NodeType::Float => {
-                    let value = operand.value.parse::<f64>().map_err(|_| anyhow!(""))?;
-                    self.operations.push(ArithmeticOp {
-                        op_type: ArithOp::PushFlt,
-                        record_input: None,
-                        literal_value: Some(FunctionValue::Float(value)),
-                    });
-
-                    Ok(Type::Float)
-                }
+                    stack[idx] = AttrData {
+                        $float_or_int: unsafe { lhs.$float_or_int $op rhs.$float_or_int },
+                    };
+                });
             }
-        } else {
-            let left_type =
-                self.recursively_build(parse_tree.left_operator.as_ref().unwrap(), schema)?;
-            let right_type = self.recursively_build(parse_tree.right.as_ref().unwrap(), schema)?;
 
-            match (left_type, right_type) {
-                (Type::Integer, Type::Integer) => {
-                    let op_type = match parse_tree.code {
-                        '+' => ArithOp::IntAdd,
-                        '-' => ArithOp::IntSub,
-                        '*' => ArithOp::IntMul,
-                        '/' => ArithOp::IntDiv,
-                        _ => return Err(anyhow!("Excpected ArithOp")),
-                    };
-
-                    self.operations.push(ArithmeticOp {
-                        op_type,
-                        record_input: None,
-                        literal_value: None,
-                    });
-
-                    Ok(Type::Integer)
-                }
-                _ => {
-                    if matches!(left_type, Type::Integer) {
-                        self.operations.push(ArithmeticOp {
-                            op_type: ArithOp::ToFlt2Down,
-                            record_input: None,
-                            literal_value: None,
-                        });
+            match op {
+                OpCode::Push => stack.push(values.next().unwrap()),
+                OpCode::ToFlt => {
+                    let idx = stack.len() - 1;
+                    stack[idx] = AttrData {
+                        float: unsafe { stack[idx].integer as f64 },
                     }
-
-                    if matches!(right_type, Type::Integer) {
-                        self.operations.push(ArithmeticOp {
-                            op_type: ArithOp::ToFlt,
-                            record_input: None,
-                            literal_value: None,
-                        });
+                },
+                OpCode::ToFlt2Down => {
+                    let idx = stack.len() - 2;
+                    stack[idx] = AttrData {
+                        float: unsafe { stack[idx].integer as f64 },
                     }
+                },
 
-                    let op_type = match parse_tree.code {
-                        '+' => ArithOp::FltAdd,
-                        '-' => ArithOp::FltSub,
-                        '*' => ArithOp::FltMul,
-                        '/' => ArithOp::FltDiv,
-                        _ => return Err(anyhow!("Expected ArithOp")),
-                    };
+                OpCode::IntNeg => {
+                    let idx = stack.len() - 1;
+                    stack[idx] = AttrData {
+                        integer: unsafe { -stack[idx].integer },
+                    }
+                },
+                OpCode::FltNeg => {
+                    let idx = stack.len() - 1;
+                    stack[idx] = AttrData {
+                        float: unsafe { -stack[idx].float },
+                    }
+                },
 
-                    self.operations.push(ArithmeticOp {
-                        op_type,
-                        record_input: None,
-                        literal_value: None,
-                    });
+                OpCode::IntSub => bin_op!(integer, -),
+                OpCode::IntAdd => bin_op!(integer, +),
+                OpCode::IntDiv => bin_op!(integer, /),
+                OpCode::IntMul => bin_op!(integer, *),
 
-                    Ok(Type::Float)
-                }
-            }
-        }
-    }
-
-    pub fn apply(&self, record: &Record) -> Result<FunctionValue> {
-        let mut stack: Vec<FunctionValue> = Vec::new();
-
-        for op in &self.operations {
-            match op.op_type {
-                ArithOp::PushInt => {
-                    let value = if let Some(record_idx) = op.record_input {
-                        if let Some(MappedAttrData::Integer(val)) = record.get_column(record_idx) {
-                            *val
-                        } else {
-                            return Err(anyhow!(""));
-                        }
-                    } else if let Some(FunctionValue::Integer(val)) = &op.literal_value {
-                        *val
-                    } else {
-                        return Err(anyhow!(""));
-                    };
-                    stack.push(FunctionValue::Integer(value));
-                }
-                ArithOp::PushFlt => {
-                    let value = if let Some(record_idx) = op.record_input {
-                        if let Some(MappedAttrData::Float(val)) = record.get_column(record_idx) {
-                            *val
-                        } else {
-                            return Err(anyhow!(""));
-                        }
-                    } else if let Some(FunctionValue::Float(val)) = &op.literal_value {
-                        *val
-                    } else {
-                        return Err(anyhow!(""));
-                    };
-                    stack.push(FunctionValue::Float(value));
-                }
-                ArithOp::ToFlt => {
-                    if let Some(FunctionValue::Integer(val)) = stack.pop() {
-                        stack.push(FunctionValue::Float(val as f64));
-                    } else {
-                        return Err(anyhow!(""));
-                    }
-                }
-                ArithOp::ToFlt2Down => {
-                    let len = stack.len();
-                    if len >= 2 {
-                        if let FunctionValue::Integer(val) = stack[len - 2] {
-                            stack[len - 2] = FunctionValue::Float(val as f64);
-                        } else {
-                            return Err(anyhow!(""));
-                        }
-                    } else {
-                        return Err(anyhow!(""));
-                    }
-                }
-                ArithOp::IntNeg => {
-                    if let Some(FunctionValue::Integer(val)) = stack.pop() {
-                        stack.push(FunctionValue::Integer(-val));
-                    } else {
-                        return Err(anyhow!(""));
-                    }
-                }
-                ArithOp::FltNeg => {
-                    if let Some(FunctionValue::Float(val)) = stack.pop() {
-                        stack.push(FunctionValue::Float(-val));
-                    } else {
-                        return Err(anyhow!(""));
-                    }
-                }
-                ArithOp::IntAdd | ArithOp::IntSub | ArithOp::IntMul | ArithOp::IntDiv => {
-                    if let (Some(right), Some(left)) = (stack.pop(), stack.pop()) {
-                        if let (FunctionValue::Integer(l), FunctionValue::Integer(r)) =
-                            (left, right)
-                        {
-                            let result = match op.op_type {
-                                ArithOp::IntAdd => l + r,
-                                ArithOp::IntSub => l - r,
-                                ArithOp::IntMul => l * r,
-                                ArithOp::IntDiv => l / r,
-
-                                _ => unreachable!(),
-                            };
-                            stack.push(FunctionValue::Integer(result));
-                        } else {
-                            return Err(anyhow!(""));
-                        }
-                    } else {
-                        return Err(anyhow!(""));
-                    }
-                }
-                ArithOp::FltAdd | ArithOp::FltSub | ArithOp::FltMul | ArithOp::FltDiv => {
-                    if let (Some(right), Some(left)) = (stack.pop(), stack.pop()) {
-                        if let (FunctionValue::Float(l), FunctionValue::Float(r)) = (left, right) {
-                            let result = match op.op_type {
-                                ArithOp::FltAdd => l + r,
-                                ArithOp::FltSub => l - r,
-                                ArithOp::FltMul => l * r,
-                                ArithOp::FltDiv => l / r,
-                                _ => unreachable!(),
-                            };
-                            stack.push(FunctionValue::Float(result));
-                        } else {
-                            return Err(anyhow!(""));
-                        }
-                    } else {
-                        return Err(anyhow!(""));
-                    }
-                }
+                OpCode::FltSub => bin_op!(float, -),
+                OpCode::FltAdd => bin_op!(float, +),
+                OpCode::FltDiv => bin_op!(float, /),
+                OpCode::FltMul => bin_op!(float, *),
             }
         }
 
-        if stack.len() == 1 {
-            Ok(stack.into_iter().next().unwrap())
-        } else {
-            Err(anyhow!(""))
+        match self.output_type {
+            Type::Integer => MappedAttrData::Integer(unsafe { stack[0].integer }),
+            Type::Float => MappedAttrData::Float(unsafe { stack[0].float }),
+            _ => panic!(),
         }
-    }
-
-    pub fn returns_int(&self) -> bool {
-        self.returns_int
-    }
-}
-
-#[derive(Debug)]
-pub struct FuncOperator {
-    pub code: char,
-    pub left_operator: Option<Box<FuncOperator>>,
-    pub right: Option<Box<FuncOperator>>,
-    pub left_operand: Option<Operand>,
-}
-
-#[derive(Debug)]
-pub struct Operand {
-    pub code: NodeType,
-    pub value: String,
-}
-
-#[derive(Debug, PartialEq)]
-pub enum NodeType {
-    Name,
-    Integer,
-    Float,
-}
-
-impl Default for Function {
-    fn default() -> Self {
-        Self::new()
     }
 }

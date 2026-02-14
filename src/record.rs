@@ -13,11 +13,11 @@ enum AttrType {
 }
 
 #[derive(Copy, Clone)]
-union AttrData {
+pub union AttrData {
     // I bumped this to i64 because the `AttrData` already had an 8 byte variant, so using i32
     // wouldn't save any space
-    integer: i64,
-    float: f64,
+    pub integer: i64,
+    pub float: f64,
 
     // points to the start index of the null-terminated string in the strbuf
     string: usize,
@@ -30,8 +30,8 @@ impl std::fmt::Debug for AttrData {
 }
 
 pub enum MappedAttrData<'a> {
-    Integer(&'a i64),
-    Float(&'a f64),
+    Integer(i64),
+    Float(f64),
     String(&'a str),
 }
 
@@ -51,6 +51,10 @@ impl Record {
             kinds: Vec::new(),
             strbuf: String::new(),
         }
+    }
+
+    pub unsafe fn get_raw_attr_data_unchecked(&self, index: usize) -> AttrData {
+        self.data[index]
     }
 
     pub fn extract_next_record(
@@ -119,11 +123,11 @@ impl Record {
         match self.kinds.get(index)? {
             AttrType::Integer => {
                 let val = unsafe { &self.data[index].integer };
-                Some(MappedAttrData::Integer(val))
+                Some(MappedAttrData::Integer(*val))
             }
             AttrType::Float => {
                 let val = unsafe { &self.data[index].float };
-                Some(MappedAttrData::Float(val))
+                Some(MappedAttrData::Float(*val))
             }
             AttrType::String => {
                 let start = unsafe { self.data[index].string };
