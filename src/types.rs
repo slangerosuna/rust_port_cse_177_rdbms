@@ -38,4 +38,3 @@ pub enum FileType {
     Sorted,
     Index,
 }
-

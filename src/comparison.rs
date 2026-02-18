@@ -14,7 +14,7 @@ pub struct Comparison {
     pub op: CompOp,
 }
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct OrderMaker {
     pub atts: Vec<(i32, Type)>,
 }
@@ -64,12 +64,9 @@ impl Cnf {
     }
 
     pub fn run(&self, left: &Record, right: &Record) -> bool {
-        for comparison in &self.and_list {
-            if !comparison.run(left, right) {
-                return false;
-            }
-        }
-        true
+        self.and_list
+            .iter()
+            .all(|comparison| comparison.run(left, right))
     }
 
     pub fn add_comparison(&mut self, comparison: Comparison) {

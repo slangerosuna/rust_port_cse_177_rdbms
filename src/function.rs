@@ -38,7 +38,14 @@ pub enum ArithExpr {
 }
 
 impl ArithExpr {
-    fn compile(&self, schema: &Schema, ops: &mut Vec<OpCode>, values: &mut Vec<Value>, max_depth: &mut usize, depth: &mut usize) -> Type {
+    fn compile(
+        &self,
+        schema: &Schema,
+        ops: &mut Vec<OpCode>,
+        values: &mut Vec<Value>,
+        max_depth: &mut usize,
+        depth: &mut usize,
+    ) -> Type {
         fn bin_op_match_arm(
             lhs: &Box<ArithExpr>,
             rhs: &Box<ArithExpr>,
@@ -128,10 +135,50 @@ impl ArithExpr {
                 child_type
             }
 
-            ArithExpr::Sub(lhs, rhs) => bin_op_match_arm(lhs, rhs, OpCode::IntSub, OpCode::FltSub, schema, ops, values, max_depth, depth),
-            ArithExpr::Add(lhs, rhs) => bin_op_match_arm(lhs, rhs, OpCode::IntAdd, OpCode::FltAdd, schema, ops, values, max_depth, depth),
-            ArithExpr::Mul(lhs, rhs) => bin_op_match_arm(lhs, rhs, OpCode::IntMul, OpCode::FltMul, schema, ops, values, max_depth, depth),
-            ArithExpr::Div(lhs, rhs) => bin_op_match_arm(lhs, rhs, OpCode::IntDiv, OpCode::FltDiv, schema, ops, values, max_depth, depth),
+            ArithExpr::Sub(lhs, rhs) => bin_op_match_arm(
+                lhs,
+                rhs,
+                OpCode::IntSub,
+                OpCode::FltSub,
+                schema,
+                ops,
+                values,
+                max_depth,
+                depth,
+            ),
+            ArithExpr::Add(lhs, rhs) => bin_op_match_arm(
+                lhs,
+                rhs,
+                OpCode::IntAdd,
+                OpCode::FltAdd,
+                schema,
+                ops,
+                values,
+                max_depth,
+                depth,
+            ),
+            ArithExpr::Mul(lhs, rhs) => bin_op_match_arm(
+                lhs,
+                rhs,
+                OpCode::IntMul,
+                OpCode::FltMul,
+                schema,
+                ops,
+                values,
+                max_depth,
+                depth,
+            ),
+            ArithExpr::Div(lhs, rhs) => bin_op_match_arm(
+                lhs,
+                rhs,
+                OpCode::IntDiv,
+                OpCode::FltDiv,
+                schema,
+                ops,
+                values,
+                max_depth,
+                depth,
+            ),
         }
     }
 }
@@ -144,7 +191,7 @@ pub struct Function {
 }
 
 impl Function {
-    fn new(root_expr: &ArithExpr, schema: &Schema) -> Self {
+    pub fn new(root_expr: &ArithExpr, schema: &Schema) -> Self {
         let mut ops = Vec::new();
         let mut values = Vec::new();
         let mut max_depth = 0;
@@ -159,7 +206,7 @@ impl Function {
         }
     }
 
-    fn eval(&self, record: &Record) -> MappedAttrData {
+    pub fn eval(&self, record: &Record) -> MappedAttrData {
         let mut values = self.values.iter().map(|v| unsafe {
             match v {
                 Value::IntLit(i) => AttrData { integer: *i },
@@ -191,26 +238,26 @@ impl Function {
                     stack[idx] = AttrData {
                         float: unsafe { stack[idx].integer as f64 },
                     }
-                },
+                }
                 OpCode::ToFlt2Down => {
                     let idx = stack.len() - 2;
                     stack[idx] = AttrData {
                         float: unsafe { stack[idx].integer as f64 },
                     }
-                },
+                }
 
                 OpCode::IntNeg => {
                     let idx = stack.len() - 1;
                     stack[idx] = AttrData {
                         integer: unsafe { -stack[idx].integer },
                     }
-                },
+                }
                 OpCode::FltNeg => {
                     let idx = stack.len() - 1;
                     stack[idx] = AttrData {
                         float: unsafe { -stack[idx].float },
                     }
-                },
+                }
 
                 OpCode::IntSub => bin_op!(integer, -),
                 OpCode::IntAdd => bin_op!(integer, +),

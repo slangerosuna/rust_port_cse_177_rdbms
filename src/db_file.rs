@@ -117,7 +117,7 @@ pub struct DBFile {
     current_page_pos: u64,
     current_page: Page,
     is_open: bool,
-    schema: Option<Schema>,
+    pub schema: Option<Schema>,
 }
 
 impl DBFile {

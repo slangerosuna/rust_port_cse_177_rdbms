@@ -29,10 +29,71 @@ impl std::fmt::Debug for AttrData {
     }
 }
 
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum MappedAttrData<'a> {
     Integer(i64),
     Float(f64),
     String(&'a str),
+}
+
+// Just assumes that there are not NaN floats or something like that, which is probably fine for
+// our purposes
+impl Eq for MappedAttrData<'_> {}
+
+impl PartialEq for Record {
+    fn eq(&self, other: &Self) -> bool {
+        self.get_data() == other.get_data()
+    }
+}
+
+impl Eq for Record {}
+
+use std::hash::Hash;
+impl Hash for MappedAttrData<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        fn rounded_for_hash(val: f64) -> u64 {
+            (val * 1e6).round() as u64
+        }
+
+        match self {
+            MappedAttrData::Integer(val) => val.hash(state),
+            MappedAttrData::Float(val) => rounded_for_hash(*val).hash(state),
+            MappedAttrData::String(val) => val.hash(state),
+        }
+    }
+}
+
+impl Hash for Record {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.get_data().hash(state);
+    }
+}
+
+impl From<Vec<MappedAttrData<'_>>> for Record {
+    fn from(mapped_data: Vec<MappedAttrData>) -> Self {
+        let mut record = Record::new();
+        for data in mapped_data {
+            match data {
+                MappedAttrData::Integer(val) => {
+                    record.kinds.push(AttrType::Integer);
+                    record.data.push(AttrData { integer: val });
+                }
+                MappedAttrData::Float(val) => {
+                    record.kinds.push(AttrType::Float);
+                    record.data.push(AttrData { float: val });
+                }
+                MappedAttrData::String(val) => {
+                    record.kinds.push(AttrType::String);
+                    record.data.push(AttrData {
+                        string: record.strbuf.len(),
+                    });
+                    record.strbuf.push_str(val);
+                    record.strbuf.push('\0');
+                }
+            }
+        }
+        record
+    }
 }
 
 #[derive(Default, Clone, Debug)]
@@ -189,6 +250,7 @@ impl Record {
         let str_buf_offset = self.strbuf.len();
         self.strbuf.push_str(&other.strbuf);
         self.kinds.extend_from_slice(&other.kinds);
+
         for (i, kind) in other.kinds.iter().enumerate() {
             match kind {
                 AttrType::Integer => {
