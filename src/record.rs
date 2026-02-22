@@ -36,6 +36,38 @@ pub enum MappedAttrData<'a> {
     String(&'a str),
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum ProjectedData {
+    Integer(i64),
+    Float(f64),
+    String(String),
+}
+
+impl Into<ProjectedData> for MappedAttrData<'_> {
+    fn into(self) -> ProjectedData {
+        match self {
+            MappedAttrData::Integer(val) => ProjectedData::Integer(val),
+            MappedAttrData::Float(val) => ProjectedData::Float(val),
+            MappedAttrData::String(val) => ProjectedData::String(val.to_string()),
+        }
+    }
+}
+
+impl Eq for ProjectedData {}
+
+impl Hash for ProjectedData {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        match self {
+            ProjectedData::Integer(val) => val.hash(state),
+            ProjectedData::Float(val) => {
+                let rounded = (val * 1e6).round() as u64;
+                rounded.hash(state);
+            }
+            ProjectedData::String(val) => val.hash(state),
+        }
+    }
+}
+
 // Just assumes that there are not NaN floats or something like that, which is probably fine for
 // our purposes
 impl Eq for MappedAttrData<'_> {}
@@ -202,6 +234,16 @@ impl Record {
     pub fn get_data(&self) -> Vec<MappedAttrData> {
         (0..self.data.len())
             .map(|attr| self.get_column(attr).unwrap())
+            .collect()
+    }
+
+    pub fn get_projected_data(&self, atts_to_keep: &[i32]) -> Vec<ProjectedData> {
+        atts_to_keep
+            .iter()
+            .map(|&i| self
+                .get_column(i as usize)
+                .unwrap()
+                .into())
             .collect()
     }
 

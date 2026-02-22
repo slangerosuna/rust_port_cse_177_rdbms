@@ -135,6 +135,8 @@ impl NestedLoopJoin {
 pub struct MergeJoin {
     buf: Vec<Record>,
 
+    predicate: Cnf,
+
     left_ordering: OrderMaker,
     right_ordering: OrderMaker,
 
@@ -174,12 +176,13 @@ impl MergeJoin {
             _ => (),
         }
 
-        fn cartesian_product(left_records: &[Record], right_records: &[Record]) -> Vec<Record> {
+        fn cartesian_product(predicate: &Cnf, left_records: &[Record], right_records: &[Record]) -> Vec<Record> {
             left_records
                 .iter()
                 .flat_map(|left_record| {
                     right_records
                         .iter()
+                        .filter(|right_record| predicate.run(left_record, right_record))
                         .map(|right_record| {
                             let mut joined = left_record.clone();
                             joined.merge_right(right_record);
@@ -220,8 +223,11 @@ impl MergeJoin {
             }
         }
 
-        self.buf
-            .extend(cartesian_product(&left_records, &right_records));
+        self.left_record = next_left_record;
+        self.right_record = next_right_record;
+
+        let cartesian_product = cartesian_product(&self.predicate, &left_records, &right_records);
+        self.buf.extend(cartesian_product);
 
         self.next()
     }
@@ -229,6 +235,96 @@ impl MergeJoin {
     fn ordering(&self, left: &Record, right: &Record) -> std::cmp::Ordering {
         self.left_ordering
             .run_with_different_order(left, right, &self.right_ordering)
+    }
+}
+
+use std::collections::HashMap;
+
+pub struct HashJoin {
+    predicate: Cnf,
+    fill_left: bool,
+
+    hash_table: HashMap<Vec<ProjectedData>, Vec<Record>>,
+
+    buf: Vec<Record>,
+
+    left_projection: Vec<i32>,
+    right_projection: Vec<i32>,
+
+    left_producer: Box<RelOp>,
+    right_producer: Box<RelOp>,
+}
+
+impl HashJoin {
+    fn fill_hash_table(&mut self) {
+        if self.fill_left {
+            for left_record in self.left_producer.by_ref() {
+                let projected_data = left_record.get_projected_data(&self.left_projection);
+                if let Some(records) = self.hash_table.get_mut(&projected_data) {
+                    records.push(left_record);
+                } else {
+                    self.hash_table.insert(projected_data, vec![left_record]);
+                }
+            }
+        } else {
+            for right_record in self.right_producer.by_ref() {
+                let projected_data = right_record.get_projected_data(&self.right_projection);
+                if let Some(records) = self.hash_table.get_mut(&projected_data) {
+                    records.push(right_record);
+                } else {
+                    self.hash_table.insert(projected_data, vec![right_record]);
+                }
+            }
+        }
+    }
+
+    pub fn next(&mut self) -> Option<Record> {
+        if !self.buf.is_empty() {
+            return self.buf.pop();
+        }
+        if self.hash_table.len() == 0 {
+            self.fill_hash_table();
+        }
+
+        if self.fill_left {
+            loop {
+                let record = self.right_producer.next()?;
+                let projected_data = record.get_projected_data(&self.right_projection);
+
+                let Some(records) = self.hash_table.get(&projected_data) else { continue; };
+                let records: Vec<Record> = records
+                    .iter()
+                    .filter(|left_record: &&Record| self.predicate.run(*left_record, &record))
+                    .map(|left_record: &Record| {
+                        let mut joined = left_record.clone();
+                        joined.merge_right(&record);
+                        joined
+                    })
+                    .collect();
+
+                self.buf.extend(records);
+                return self.next();
+            }
+        } else {
+            loop {
+                let record = self.left_producer.next()?;
+                let projected_data = record.get_projected_data(&self.left_projection);
+
+                let Some(records) = self.hash_table.get(&projected_data) else { continue; };
+                let records: Vec<Record> = records
+                    .iter()
+                    .filter(|right_record: &&Record| self.predicate.run(&record, *right_record))
+                    .map(|right_record: &Record| {
+                        let mut joined = record.clone();
+                        joined.merge_right(&right_record);
+                        joined
+                    })
+                    .collect();
+
+                self.buf.extend(records);
+                return self.next();
+            }
+        }
     }
 }
 

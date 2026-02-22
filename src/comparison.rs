@@ -32,6 +32,23 @@ impl Cnf {
         }
     }
 
+    pub fn get_projections(&self) -> (Vec<i32>, Vec<i32>) {
+        let (left, right) = self.get_sort_orders();
+
+        fn map_ordermaker(ordering: OrderMaker) -> Vec<i32> {
+            ordering
+                .atts
+                .iter()
+                .map(|att| att.0)
+                .collect()
+        }
+
+        let left = map_ordermaker(left);
+        let right = map_ordermaker(right);
+
+        (left, right)
+    }
+
     pub fn get_sort_orders(&self) -> (OrderMaker, OrderMaker) {
         let mut left = OrderMaker::default();
         let mut right = OrderMaker::default();
