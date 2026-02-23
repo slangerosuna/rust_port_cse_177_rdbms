@@ -49,9 +49,8 @@ pub struct OrderByAtts {
 }
 
 pub enum ConditionExpr {
-    Att(String),
-    Literal(String),
-    ArithExpr(ArithExpr),
+    StrLit(String),
+    Arith(ArithExpr),
 }
 
 pub enum Condition {

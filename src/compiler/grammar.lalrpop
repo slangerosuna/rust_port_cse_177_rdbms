@@ -5,7 +5,7 @@ use crate::compiler::Token;
 grammar;
 
 pub Query: Query = {
-#[precedence(level = "1")]
+#[precedence(level = "0")]
   "(" <q: Query> ")" => q,
   <table: Name> => {
       Query::Scan {
@@ -54,6 +54,20 @@ pub Query: Query = {
           from: Box::new(sub_query),
       }
   },
+  <sub_query: Query> "ORDER" "BY" <order_atts: OrderByAtts> "ASC" => {
+      Query::OrderBy {
+          asc: true,
+          atts: order_atts,
+          from: Box::new(sub_query),
+      }
+  },
+  <sub_query: Query> "ORDER" "BY" <order_atts: OrderByAtts> "DESC" => {
+      Query::OrderBy {
+          asc: false,
+          atts: order_atts,
+          from: Box::new(sub_query),
+      }
+  },
   <sub_query: Query> "ORDER" "BY" <order_atts: OrderByAtts> => {
       Query::OrderBy {
           asc: true,
@@ -65,6 +79,30 @@ pub Query: Query = {
   <left: Query> "INNER" "JOIN" <right: Query> "ON" <cond: Condition> => {
       Query::Join {
           join_type: JoinType::Inner,
+          left: Box::new(left),
+          right: Box::new(right),
+          on: cond,
+      }
+  },
+  <left: Query> "LEFT" "JOIN" <right: Query> "ON" <cond: Condition> => {
+      Query::Join {
+          join_type: JoinType::LeftOuter,
+          left: Box::new(left),
+          right: Box::new(right),
+          on: cond,
+      }
+  },
+  <left: Query> "RIGHT" "JOIN" <right: Query> "ON" <cond: Condition> => {
+      Query::Join {
+          join_type: JoinType::RightOuter,
+          left: Box::new(left),
+          right: Box::new(right),
+          on: cond,
+      }
+  },
+  <left: Query> "FULL" "OUTER" "JOIN" <right: Query> "ON" <cond: Condition> => {
+      Query::Join {
+          join_type: JoinType::FullOuter,
           left: Box::new(left),
           right: Box::new(right),
           on: cond,
@@ -86,8 +124,33 @@ pub NameList: Vec<String> = {
     <name: Name> => vec![name],
 };
 
+pub ConditionExpr: ConditionExpr = {
+    <expr: ArithExpr> => ConditionExpr::Arith(expr),
+    <string: Str> => ConditionExpr::StrLit(string),
+}
+
 pub Condition: Condition = {
+#[precedence(level="0")]
+    "(" <cond: Condition> ")" => cond,
     "TRUE" => Condition::BoolLiteral(true),
+    "FALSE" => Condition::BoolLiteral(false),
+
+#[precedence(level = "1")]
+    <left: ConditionExpr> "<" <right: ConditionExpr> => Condition::Comparison(Box::new(left), Box::new(right), CompOp::Less),
+    <left: ConditionExpr> "<=" <right: ConditionExpr> => Condition::Comparison(Box::new(left), Box::new(right), CompOp::LessEqual),
+    <left: ConditionExpr> ">" <right: ConditionExpr> => Condition::Comparison(Box::new(left), Box::new(right), CompOp::Greater),
+    <left: ConditionExpr> ">=" <right: ConditionExpr> => Condition::Comparison(Box::new(left), Box::new(right), CompOp::GreaterEqual),
+    <left: ConditionExpr> "=" <right: ConditionExpr> => Condition::Comparison(Box::new(left), Box::new(right), CompOp::Equal),
+    <left: ConditionExpr> "IS" <right: ConditionExpr> => Condition::Comparison(Box::new(left), Box::new(right), CompOp::Equal),
+
+#[precedence(level = "2")]
+    "NOT" <cond: Condition> => Condition::Not(Box::new(cond)),
+
+#[precedence(level = "3")] #[assoc(side="left")]
+    <left: Condition> "AND" <right: Condition> => Condition::And(Box::new(left), Box::new(right)),
+
+#[precedence(level = "4")] #[assoc(side="left")]
+    <left: Condition> "OR" <right: Condition> => Condition::Or(Box::new(left), Box::new(right)),
 };
 
 pub GroupByAtts: GroupByAtts = {
@@ -135,6 +198,7 @@ extern {
         "BY" => Token::By,
         "LEFT" => Token::Left,
         "RIGHT" => Token::Right,
+        "FULL" => Token::Full,
         "INNER" => Token::Inner,
         "OUTER" => Token::Outer,
         "JOIN" => Token::Join,
