@@ -2,7 +2,7 @@ use crate::record::*;
 use crate::schema::*;
 use crate::types::*;
 use std::fs::{File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
+use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::path::Path;
 
 use anyhow::{Result, anyhow};

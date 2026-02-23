@@ -1,9 +1,104 @@
 use crate::*;
+use crate::compiler::ast::*;
 use crate::compiler::Token;
 
 grammar;
 
+pub Query: Query = {
+#[precedence(level = "1")]
+  "(" <q: Query> ")" => q,
+  <table: Name> => {
+      Query::Scan {
+          table_name: table
+      }
+  },
 
+#[precedence(level = "1")]
+  "SELECT" <atts: SelectAtts> "FROM" <sub_query: Query> "WHERE" <clause: Condition> => {
+      Query::Select {
+          atts,
+          from: Box::new(sub_query),
+          r#where: Some(clause),
+          distinct: false,
+      }
+  },
+  "SELECT" "DISTINCT" <atts: SelectAtts> "FROM" <sub_query: Query> "WHERE" <clause: Condition> => {
+      Query::Select {
+          atts,
+          from: Box::new(sub_query),
+          r#where: Some(clause),
+          distinct: true,
+      }
+  },
+#[precedence(level = "2")]
+  "SELECT" <atts: SelectAtts> "FROM" <sub_query: Query> => {
+      Query::Select {
+          atts,
+          from: Box::new(sub_query),
+          r#where: None,
+          distinct: false,
+      }
+  },
+  "SELECT" "DISTINCT" <atts: SelectAtts> "FROM" <sub_query: Query> => {
+      Query::Select {
+          atts,
+          from: Box::new(sub_query),
+          r#where: None,
+          distinct: true,
+      }
+  },
+#[precedence(level = "3")]
+  <sub_query: Query> "GROUP" "BY" <group_atts: GroupByAtts> => {
+      Query::GroupBy {
+          atts: group_atts,
+          from: Box::new(sub_query),
+      }
+  },
+  <sub_query: Query> "ORDER" "BY" <order_atts: OrderByAtts> => {
+      Query::OrderBy {
+          asc: true,
+          atts: order_atts,
+          from: Box::new(sub_query),
+      }
+  },
+#[precedence(level="1")]
+  <left: Query> "INNER" "JOIN" <right: Query> "ON" <cond: Condition> => {
+      Query::Join {
+          join_type: JoinType::Inner,
+          left: Box::new(left),
+          right: Box::new(right),
+          on: cond,
+      }
+  },
+};
+
+pub SelectAtts: SelectAtts = {
+    "(" <atts: SelectAtts> ")" => atts,
+    "*" => SelectAtts::Star,
+    <names: NameList> => SelectAtts::Atts(names),
+};
+
+pub NameList: Vec<String> = {
+    <mut names: NameList> "," <name: Name> => {
+        names.push(name);
+        names
+    },
+    <name: Name> => vec![name],
+};
+
+pub Condition: Condition = {
+    "TRUE" => Condition::BoolLiteral(true),
+};
+
+pub GroupByAtts: GroupByAtts = {
+    "(" <atts: GroupByAtts> ")" => atts,
+    <names: NameList> => GroupByAtts { atts: names },
+};
+
+pub OrderByAtts: OrderByAtts = {
+    "(" <atts: OrderByAtts> ")" => atts,
+    <names: NameList> => OrderByAtts { atts: names },
+};
 
 pub ArithExpr: ArithExpr = {
 #[precedence(level="0")]
@@ -33,14 +128,52 @@ extern {
         "SUM" => Token::Sum,
         "AND" => Token::And,
         "GROUP" => Token::Group,
+        "ORDER" => Token::Order,
+        "ASC" => Token::Asc,
+        "DESC" => Token::Desc,
         "DISTINCT" => Token::Distinct,
         "BY" => Token::By,
+        "LEFT" => Token::Left,
+        "RIGHT" => Token::Right,
+        "INNER" => Token::Inner,
+        "OUTER" => Token::Outer,
+        "JOIN" => Token::Join,
+        "AS" => Token::As,
+        "ON" => Token::On,
+        "AND" => Token::And,
+        "OR" => Token::Or,
+        "NOT" => Token::Not,
+        "IS" => Token::Is,
+        "NULL" => Token::Null,
+        "IN" => Token::In,
+        "LIKE" => Token::Like,
+        "BETWEEN" => Token::Between,
+        "EXISTS" => Token::Exists,
+        "ALL" => Token::All,
+        "ANY" => Token::Any,
+        "UNION" => Token::Union,
+        "INTERSECT" => Token::Intersect,
+        "EXCEPT" => Token::Except,
+        "UPDATE" => Token::Update,
+        "SET" => Token::Set,
+        "DELETE" => Token::Delete,
+        "INSERT" => Token::Insert,
+        "INTO" => Token::Into,
+        "VALUES" => Token::Values,
+        "CREATE" => Token::Create,
+        "DROP" => Token::Drop,
+        "TABLE" => Token::Table,
+        "VIEW" => Token::View,
+        "TRUE" => Token::True,
+        "FALSE" => Token::False,
 
         // Operators and punctuation
         "(" => Token::LParen,
         ")" => Token::RParen,
         "<" => Token::Lt,
+        "<=" => Token::Lte,
         ">" => Token::Gt,
+        ">=" => Token::Gte,
         "=" => Token::Eq,
         "+" => Token::Plus,
         "-" => Token::Minus,

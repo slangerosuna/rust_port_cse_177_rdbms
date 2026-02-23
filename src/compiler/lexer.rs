@@ -12,14 +12,88 @@ pub enum Token {
     Where,
     #[regex("(?i)SUM")]
     Sum,
-    #[regex("(?i)AND")]
-    And,
     #[regex("(?i)GROUP")]
     Group,
+    #[regex("(?i)ORDER")]
+    Order,
     #[regex("(?i)BY")]
     By,
+    #[regex("(?i)ASC")]
+    Asc,
+    #[regex("(?i)DESC")]
+    Desc,
     #[regex("(?i)DISTINCT")]
     Distinct,
+    #[regex("(?i)LEFT")]
+    Left,
+    #[regex("(?i)RIGHT")]
+    Right,
+    #[regex("(?i)FULL")]
+    Full,
+    #[regex("(?i)INNER")]
+    Inner,
+    #[regex("(?i)OUTER")]
+    Outer,
+    #[regex("(?i)JOIN")]
+    Join,
+    #[regex("(?i)AS")]
+    As,
+    #[regex("(?i)ON")]
+    On,
+    #[regex("(?i)AND")]
+    And,
+    #[regex("(?i)OR")]
+    Or,
+    #[regex("(?i)NOT")]
+    Not,
+
+    // I added a bunch of these tokens for later, they are not currently used in the grammar
+    #[regex("(?i)IS")]
+    Is,
+    #[regex("(?i)NULL")]
+    Null,
+    #[regex("(?i)IN")]
+    In,
+    #[regex("(?i)LIKE")]
+    Like,
+    #[regex("(?i)BETWEEN")]
+    Between,
+    #[regex("(?i)EXISTS")]
+    Exists,
+    #[regex("(?i)ALL")]
+    All,
+    #[regex("(?i)ANY")]
+    Any,
+    #[regex("(?i)UNION")]
+    Union,
+    #[regex("(?i)INTERSECT")]
+    Intersect,
+    #[regex("(?i)EXCEPT")]
+    Except,
+    #[regex("(?i)UPDATE")]
+    Update,
+    #[regex("(?i)SET")]
+    Set,
+    #[regex("(?i)DELETE")]
+    Delete,
+    #[regex("(?i)INSERT")]
+    Insert,
+    #[regex("(?i)INTO")]
+    r#Into,
+    #[regex("(?i)VALUES")]
+    Values,
+    #[regex("(?i)CREATE")]
+    Create,
+    #[regex("(?i)DROP")]
+    r#Drop,
+    #[regex("(?i)TABLE")]
+    Table,
+    #[regex("(?i)VIEW")]
+    View,
+    #[regex("(?i)TRUE")]
+    True,
+    #[regex("(?i)FALSE")]
+    False,
 
     #[token("(")]
     LParen,
@@ -27,8 +101,12 @@ pub enum Token {
     RParen,
     #[token("<")]
     Lt,
+    #[token("<=")]
+    Lte,
     #[token(">")]
     Gt,
+    #[token(">=")]
+    Gte,
     #[token("=")]
     Eq,
     #[token("+")]

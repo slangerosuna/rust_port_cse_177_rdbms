@@ -206,7 +206,7 @@ impl Function {
         }
     }
 
-    pub fn eval(&self, record: &Record) -> MappedAttrData {
+    pub fn eval(&self, record: &Record) -> MappedAttrData<'_> {
         let mut values = self.values.iter().map(|v| unsafe {
             match v {
                 Value::IntLit(i) => AttrData { integer: *i },

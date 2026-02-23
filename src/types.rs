@@ -28,7 +28,9 @@ impl std::fmt::Display for Type {
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum CompOp {
     Less,
+    LessEqual,
     Greater,
+    GreaterEqual,
     Equal,
 }
 

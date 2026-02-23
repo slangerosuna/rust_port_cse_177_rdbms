@@ -1,11 +1,5 @@
 use crate::catalog::Catalog;
-use crate::comparison::Comparison;
-use crate::relop::*;
-use crate::schema::Schema;
-use anyhow::{Result, anyhow};
 use lalrpop_util::*;
-use logos::Logos;
-use std::collections::HashMap;
 
 mod ast;
 mod lexer;
@@ -16,8 +10,6 @@ lalrpop_mod!(
     "/compiler/grammar.rs"
 );
 
-pub use ast::*;
-use grammar::*;
 use lexer::*;
 
 pub struct QueryCompiler<'a> {

@@ -164,7 +164,7 @@ impl Record {
         let mut strbuf = String::new();
         let mut attr_buf = Vec::new();
 
-        for (i, att) in atts.iter().enumerate() {
+        for (_i, att) in atts.iter().enumerate() {
             attr_buf.clear();
             buf_reader.read_until(b'|', &mut attr_buf).ok()?;
             if attr_buf.last() == Some(&b'|') {
@@ -207,7 +207,7 @@ impl Record {
         self.strbuf = strbuf;
 
         // get rid of trailing newline (should also clear stuff after the last | which could be used for comments, ig)
-        buf_reader.read_until(b'\n', &mut Vec::new());
+        buf_reader.read_until(b'\n', &mut Vec::new()).ok()?;
 
         Some(())
     }
@@ -231,7 +231,7 @@ impl Record {
         }
     }
 
-    pub fn get_data(&self) -> Vec<MappedAttrData> {
+    pub fn get_data(&self) -> Vec<MappedAttrData<'_>> {
         (0..self.data.len())
             .map(|attr| self.get_column(attr).unwrap())
             .collect()
@@ -240,10 +240,7 @@ impl Record {
     pub fn get_projected_data(&self, atts_to_keep: &[i32]) -> Vec<ProjectedData> {
         atts_to_keep
             .iter()
-            .map(|&i| self
-                .get_column(i as usize)
-                .unwrap()
-                .into())
+            .map(|&i| self.get_column(i as usize).unwrap().into())
             .collect()
     }
 

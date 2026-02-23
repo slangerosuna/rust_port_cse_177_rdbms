@@ -21,6 +21,7 @@ pub enum RelOp {
     DupElim(DupElim),
     ApplyFunction(ApplyFunction),
     GroupBy(GroupBy),
+    OrderBy(OrderBy),
     WriteOut(WriteOut),
 }
 
@@ -28,23 +29,31 @@ impl Iterator for RelOp {
     type Item = Record;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match self {
-            RelOp::Scan(scan) => scan.next(),
-            RelOp::Select(select) => select.next(),
-            RelOp::Project(project) => project.next(),
-            RelOp::NestedLoopJoin(join) => join.next(),
-            RelOp::MergeJoin(join) => join.next(),
-            RelOp::DupElim(dup_elim) => dup_elim.next(),
-            RelOp::ApplyFunction(apply_function) => apply_function.next(),
-            RelOp::GroupBy(group_by) => group_by.next(),
-            RelOp::WriteOut(write_out) => write_out.next(),
+        macro_rules! impl_next {
+            ($($variant:ident),*) => {
+                match self {
+                    $(RelOp::$variant(op) => op.next(),)*
+                }
+             };
         }
+
+        impl_next!(
+            Scan,
+            Select,
+            Project,
+            NestedLoopJoin,
+            MergeJoin,
+            DupElim,
+            ApplyFunction,
+            GroupBy,
+            OrderBy,
+            WriteOut
+        )
     }
 }
 
 pub struct Scan {
     file: DBFile,
-    table_name: String,
 }
 
 impl Scan {
@@ -176,7 +185,11 @@ impl MergeJoin {
             _ => (),
         }
 
-        fn cartesian_product(predicate: &Cnf, left_records: &[Record], right_records: &[Record]) -> Vec<Record> {
+        fn cartesian_product(
+            predicate: &Cnf,
+            left_records: &[Record],
+            right_records: &[Record],
+        ) -> Vec<Record> {
             left_records
                 .iter()
                 .flat_map(|left_record| {
@@ -291,7 +304,9 @@ impl HashJoin {
                 let record = self.right_producer.next()?;
                 let projected_data = record.get_projected_data(&self.right_projection);
 
-                let Some(records) = self.hash_table.get(&projected_data) else { continue; };
+                let Some(records) = self.hash_table.get(&projected_data) else {
+                    continue;
+                };
                 let records: Vec<Record> = records
                     .iter()
                     .filter(|left_record: &&Record| self.predicate.run(*left_record, &record))
@@ -310,7 +325,9 @@ impl HashJoin {
                 let record = self.left_producer.next()?;
                 let projected_data = record.get_projected_data(&self.left_projection);
 
-                let Some(records) = self.hash_table.get(&projected_data) else { continue; };
+                let Some(records) = self.hash_table.get(&projected_data) else {
+                    continue;
+                };
                 let records: Vec<Record> = records
                     .iter()
                     .filter(|right_record: &&Record| self.predicate.run(&record, *right_record))
@@ -331,8 +348,6 @@ impl HashJoin {
 use std::collections::HashSet;
 
 pub struct DupElim {
-    schema: Schema,
-
     seen: HashSet<Record>,
     producer: Box<RelOp>,
 }
@@ -351,7 +366,6 @@ impl DupElim {
 
 pub struct ApplyFunction {
     function: Function,
-
     producer: Box<RelOp>,
 }
 
@@ -366,15 +380,53 @@ impl ApplyFunction {
 
 pub struct GroupBy {
     grouping: OrderMaker,
-    records: Vec<Record>,
+
+    current_group: Vec<Record>,
+    next_record: Option<Record>,
+
     producer: Box<RelOp>,
 }
 
 impl GroupBy {
     fn next(&mut self) -> Option<Record> {
+        if self.current_group.is_empty() {
+            if let Some(next_record) = self.next_record.take() {
+                self.current_group.push(next_record);
+            } else {
+                self.current_group.push(self.producer.next()?);
+            }
+
+            while let Some(record) = self.producer.next() {
+                if self.grouping.run(&self.current_group[0], &record) == std::cmp::Ordering::Equal {
+                    self.current_group.push(record);
+                } else {
+                    self.next_record = Some(record);
+                    break;
+                }
+            }
+        }
+
+        todo!()
+    }
+}
+
+pub struct OrderBy {
+    ordering: OrderMaker,
+    records: Vec<Record>,
+    producer: Box<RelOp>,
+    ascending: bool,
+}
+
+impl OrderBy {
+    fn next(&mut self) -> Option<Record> {
         if self.records.is_empty() {
             self.records = self.producer.by_ref().collect::<Vec<_>>();
-            self.records.sort_by(|a, b| self.grouping.run(b, a));
+
+            if self.ascending {
+                self.records.sort_by(|a, b| self.ordering.run(b, a));
+            } else {
+                self.records.sort_by(|a, b| self.ordering.run(a, b));
+            }
         }
 
         self.records.pop()
@@ -382,9 +434,7 @@ impl GroupBy {
 }
 
 pub struct WriteOut {
-    schema: Schema,
     file: String,
-
     producer: Box<RelOp>,
 }
 

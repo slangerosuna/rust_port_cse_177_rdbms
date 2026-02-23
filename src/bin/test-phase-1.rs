@@ -36,11 +36,11 @@ fn main() -> Result<()> {
         let table_name = format!("T_{i}");
 
         let table_att_no = (i + 1) * no_atts;
-        let mut atts = (0..table_att_no)
+        let atts = (0..table_att_no)
             .map(|j| format!("A_{i}_{j}"))
             .collect::<Vec<String>>();
 
-        let mut types = (0..table_att_no)
+        let types = (0..table_att_no)
             .map(|j| match j % 3 {
                 0 => "INTEGER",
                 1 => "FLOAT",

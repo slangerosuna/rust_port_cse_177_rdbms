@@ -36,17 +36,19 @@ impl Cnf {
         let (left, right) = self.get_sort_orders();
 
         fn map_ordermaker(ordering: OrderMaker) -> Vec<i32> {
-            ordering
-                .atts
-                .iter()
-                .map(|att| att.0)
-                .collect()
+            ordering.atts.iter().map(|att| att.0).collect()
         }
 
         let left = map_ordermaker(left);
         let right = map_ordermaker(right);
 
         (left, right)
+    }
+
+    pub fn has_inequality(&self) -> bool {
+        self.and_list.iter().any(|comparison| {
+            comparison.op == CompOp::Less || comparison.op == CompOp::Greater
+        })
     }
 
     pub fn get_sort_orders(&self) -> (OrderMaker, OrderMaker) {
@@ -132,7 +134,9 @@ impl Comparison {
 
                 match self.op {
                     CompOp::Less => left_val < right_val,
+                    CompOp::LessEqual => left_val <= right_val,
                     CompOp::Greater => left_val > right_val,
+                    CompOp::GreaterEqual => left_val >= right_val,
                     CompOp::Equal => left_val == right_val,
                 }
             }};
@@ -151,7 +155,9 @@ impl std::fmt::Display for Comparison {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let op_str = match self.op {
             CompOp::Less => "<",
+            CompOp::LessEqual => "<=",
             CompOp::Greater => ">",
+            CompOp::GreaterEqual => ">=",
             CompOp::Equal => "=",
         };
 
