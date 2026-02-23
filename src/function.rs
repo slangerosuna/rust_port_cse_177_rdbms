@@ -1,5 +1,6 @@
 use crate::*;
 
+#[derive(Debug)]
 enum Value {
     IntLit(i64),
     FltLit(f64),
@@ -25,6 +26,7 @@ enum OpCode {
     FltMul,
 }
 
+#[derive(Debug)]
 pub enum ArithExpr {
     IntLit(i64),
     FltLit(f64),
@@ -183,6 +185,7 @@ impl ArithExpr {
     }
 }
 
+#[derive(Debug)]
 pub struct Function {
     ops: Vec<OpCode>,
     values: Vec<Value>,

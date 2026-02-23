@@ -1,7 +1,7 @@
 use crate::*;
 
 pub struct QueryExecutionTree {
-    root: RelOp,
+    pub root: RelOp,
 }
 
 impl Iterator for QueryExecutionTree {
@@ -18,6 +18,7 @@ pub enum RelOp {
     Project(Project),
     NestedLoopJoin(NestedLoopJoin),
     MergeJoin(MergeJoin),
+    HashJoin(HashJoin),
     DupElim(DupElim),
     ApplyFunction(ApplyFunction),
     GroupBy(GroupBy),
@@ -43,6 +44,7 @@ impl Iterator for RelOp {
             Project,
             NestedLoopJoin,
             MergeJoin,
+            HashJoin,
             DupElim,
             ApplyFunction,
             GroupBy,
@@ -53,7 +55,7 @@ impl Iterator for RelOp {
 }
 
 pub struct Scan {
-    file: DBFile,
+    pub file: DBFile,
 }
 
 impl Scan {
@@ -68,10 +70,10 @@ impl Scan {
 }
 
 pub struct Select {
-    predicate: Cnf,
-    constants: Record,
+    pub predicate: Cnf,
+    pub constants: Record,
 
-    producer: Box<RelOp>,
+    pub producer: Box<RelOp>,
 }
 
 impl Select {
@@ -85,8 +87,8 @@ impl Select {
 }
 
 pub struct Project {
-    atts_to_keep: Vec<i32>,
-    producer: Box<RelOp>,
+    pub atts_to_keep: Vec<i32>,
+    pub producer: Box<RelOp>,
 }
 
 impl Project {
@@ -103,12 +105,12 @@ impl Project {
 }
 
 pub struct NestedLoopJoin {
-    predicate: Cnf,
+    pub predicate: Cnf,
 
-    records: Vec<Record>,
+    pub records: Vec<Record>,
 
-    left_producer: Box<RelOp>,
-    right_producer: Box<RelOp>,
+    pub left_producer: Box<RelOp>,
+    pub right_producer: Box<RelOp>,
 }
 
 impl NestedLoopJoin {
@@ -142,18 +144,18 @@ impl NestedLoopJoin {
 
 // Assumes input is already sorted, make sure to combine with a `GroupBy` if not
 pub struct MergeJoin {
-    buf: Vec<Record>,
+    pub buf: Vec<Record>,
 
-    predicate: Cnf,
+    pub predicate: Cnf,
 
-    left_ordering: OrderMaker,
-    right_ordering: OrderMaker,
+    pub left_ordering: OrderMaker,
+    pub right_ordering: OrderMaker,
 
-    left_record: Option<Record>,
-    right_record: Option<Record>,
+    pub left_record: Option<Record>,
+    pub right_record: Option<Record>,
 
-    left_producer: Box<RelOp>,
-    right_producer: Box<RelOp>,
+    pub left_producer: Box<RelOp>,
+    pub right_producer: Box<RelOp>,
 }
 
 impl MergeJoin {
@@ -254,18 +256,18 @@ impl MergeJoin {
 use std::collections::HashMap;
 
 pub struct HashJoin {
-    predicate: Cnf,
-    fill_left: bool,
+    pub predicate: Cnf,
+    pub fill_left: bool,
 
-    hash_table: HashMap<Vec<ProjectedData>, Vec<Record>>,
+    pub hash_table: HashMap<Vec<ProjectedData>, Vec<Record>>,
 
-    buf: Vec<Record>,
+    pub buf: Vec<Record>,
 
-    left_projection: Vec<i32>,
-    right_projection: Vec<i32>,
+    pub left_projection: Vec<i32>,
+    pub right_projection: Vec<i32>,
 
-    left_producer: Box<RelOp>,
-    right_producer: Box<RelOp>,
+    pub left_producer: Box<RelOp>,
+    pub right_producer: Box<RelOp>,
 }
 
 impl HashJoin {
@@ -348,8 +350,8 @@ impl HashJoin {
 use std::collections::HashSet;
 
 pub struct DupElim {
-    seen: HashSet<Record>,
-    producer: Box<RelOp>,
+    pub seen: HashSet<Record>,
+    pub producer: Box<RelOp>,
 }
 
 impl DupElim {
@@ -365,8 +367,8 @@ impl DupElim {
 }
 
 pub struct ApplyFunction {
-    function: Function,
-    producer: Box<RelOp>,
+    pub function: Function,
+    pub producer: Box<RelOp>,
 }
 
 impl ApplyFunction {
@@ -379,12 +381,12 @@ impl ApplyFunction {
 }
 
 pub struct GroupBy {
-    grouping: OrderMaker,
+    pub grouping: OrderMaker,
 
-    current_group: Vec<Record>,
-    next_record: Option<Record>,
+    pub current_group: Vec<Record>,
+    pub next_record: Option<Record>,
 
-    producer: Box<RelOp>,
+    pub producer: Box<RelOp>,
 }
 
 impl GroupBy {
@@ -411,10 +413,10 @@ impl GroupBy {
 }
 
 pub struct OrderBy {
-    ordering: OrderMaker,
-    records: Vec<Record>,
-    producer: Box<RelOp>,
-    ascending: bool,
+    pub ordering: OrderMaker,
+    pub records: Vec<Record>,
+    pub producer: Box<RelOp>,
+    pub ascending: bool,
 }
 
 impl OrderBy {
@@ -434,8 +436,8 @@ impl OrderBy {
 }
 
 pub struct WriteOut {
-    file: String,
-    producer: Box<RelOp>,
+    pub file: String,
+    pub producer: Box<RelOp>,
 }
 
 impl WriteOut {

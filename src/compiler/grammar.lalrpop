@@ -7,9 +7,9 @@ grammar;
 pub Query: Query = {
 #[precedence(level = "0")]
   "(" <q: Query> ")" => q,
-  <table: Name> => {
+  <tables: NameList> => {
       Query::Scan {
-          table_name: table
+          table_names: tables
       }
   },
 
@@ -75,13 +75,21 @@ pub Query: Query = {
           from: Box::new(sub_query),
       }
   },
-#[precedence(level="1")]
+#[precedence(level="1")] #[assoc(side="left")]
   <left: Query> "INNER" "JOIN" <right: Query> "ON" <cond: Condition> => {
       Query::Join {
           join_type: JoinType::Inner,
           left: Box::new(left),
           right: Box::new(right),
-          on: cond,
+          on: Some(cond),
+      }
+  },
+  <left: Query> "INNER" "JOIN" <right: Query> => {
+      Query::Join {
+          join_type: JoinType::Inner,
+          left: Box::new(left),
+          right: Box::new(right),
+          on: None,
       }
   },
   <left: Query> "LEFT" "JOIN" <right: Query> "ON" <cond: Condition> => {
@@ -89,7 +97,15 @@ pub Query: Query = {
           join_type: JoinType::LeftOuter,
           left: Box::new(left),
           right: Box::new(right),
-          on: cond,
+          on: Some(cond),
+      }
+  },
+  <left: Query> "LEFT" "JOIN" <right: Query> => {
+      Query::Join {
+          join_type: JoinType::LeftOuter,
+          left: Box::new(left),
+          right: Box::new(right),
+          on: None,
       }
   },
   <left: Query> "RIGHT" "JOIN" <right: Query> "ON" <cond: Condition> => {
@@ -97,7 +113,15 @@ pub Query: Query = {
           join_type: JoinType::RightOuter,
           left: Box::new(left),
           right: Box::new(right),
-          on: cond,
+          on: Some(cond),
+      }
+  },
+  <left: Query> "RIGHT" "JOIN" <right: Query> => {
+      Query::Join {
+          join_type: JoinType::RightOuter,
+          left: Box::new(left),
+          right: Box::new(right),
+          on: None,
       }
   },
   <left: Query> "FULL" "OUTER" "JOIN" <right: Query> "ON" <cond: Condition> => {
@@ -105,7 +129,15 @@ pub Query: Query = {
           join_type: JoinType::FullOuter,
           left: Box::new(left),
           right: Box::new(right),
-          on: cond,
+          on: Some(cond),
+      }
+  },
+  <left: Query> "FULL" "OUTER" "JOIN" <right: Query> => {
+      Query::Join {
+          join_type: JoinType::FullOuter,
+          left: Box::new(left),
+          right: Box::new(right),
+          on: None,
       }
   },
 };
@@ -181,7 +213,7 @@ pub ArithExpr: ArithExpr = {
 
 extern {
     type Location = usize;
-    type Error = ();
+    type Error = LalrpopError;
 
     enum Token {
         // Keywords

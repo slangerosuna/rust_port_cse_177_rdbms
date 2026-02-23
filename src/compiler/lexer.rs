@@ -154,3 +154,9 @@ pub fn lexer_from_str(s: &str) -> impl Iterator<Item = (usize, Token, usize)> + 
             Err(_) => None,
         })
 }
+
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}

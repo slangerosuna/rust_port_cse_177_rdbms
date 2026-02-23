@@ -46,9 +46,9 @@ impl Cnf {
     }
 
     pub fn has_inequality(&self) -> bool {
-        self.and_list.iter().any(|comparison| {
-            comparison.op == CompOp::Less || comparison.op == CompOp::Greater
-        })
+        self.and_list
+            .iter()
+            .any(|comparison| comparison.op == CompOp::Less || comparison.op == CompOp::Greater)
     }
 
     pub fn get_sort_orders(&self) -> (OrderMaker, OrderMaker) {
