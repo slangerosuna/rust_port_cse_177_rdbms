@@ -92,6 +92,30 @@ impl Cnf {
         self.and_list.push(comparison);
         self.num_ands += 1;
     }
+
+    pub fn extract_cnf(left_schema: &Schema, right_schema: &Schema) -> Self {
+        let mut cnf = Cnf::new();
+
+        for att in left_schema.get_atts() {
+            if right_schema.index_of(&att.name).is_some() {
+                let left_att_idx = left_schema.index_of(&att.name).unwrap() as i32;
+                let right_att_idx = right_schema.index_of(&att.name).unwrap() as i32;
+
+                let comparison = Comparison {
+                    operand1: Target::Left,
+                    which_att1: left_att_idx,
+                    operand2: Target::Right,
+                    which_att2: right_att_idx,
+                    att_type: att.type_,
+                    op: CompOp::Equal,
+                };
+
+                cnf.add_comparison(comparison);
+            }
+        }
+
+        cnf
+    }
 }
 
 impl Default for Comparison {

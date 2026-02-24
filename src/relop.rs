@@ -4,6 +4,12 @@ pub struct QueryExecutionTree {
     pub root: RelOp,
 }
 
+impl QueryExecutionTree {
+    pub fn as_string(&self) -> String {
+        self.root.as_string()
+    }
+}
+
 impl Iterator for QueryExecutionTree {
     type Item = Record;
 
@@ -14,6 +20,7 @@ impl Iterator for QueryExecutionTree {
 
 pub enum RelOp {
     Scan(Scan),
+    EmptyTableScan,
     Select(Select),
     Project(Project),
     NestedLoopJoin(NestedLoopJoin),
@@ -26,6 +33,25 @@ pub enum RelOp {
     WriteOut(WriteOut),
 }
 
+impl RelOp {
+    fn as_string(&self) -> String {
+        match self {
+            Self::Scan(scan) => format!("Scan({})", scan.file.get_file_name()),
+            Self::EmptyTableScan => "EmptyTableScan".to_string(),
+            Self::Select(select) => format!("Select({})", select.producer.as_string()),
+            Self::Project(project) => format!("Project({})", project.producer.as_string()),
+            Self::NestedLoopJoin(join) => format!("({} ⨝ {})", join.left_producer.as_string(), join.right_producer.as_string()),
+            Self::MergeJoin(join) => format!("({} ⨝ {})", join.left_producer.as_string(), join.right_producer.as_string()),
+            Self::HashJoin(join) => format!("({} ⨝ {})", join.left_producer.as_string(), join.right_producer.as_string()),
+            Self::DupElim(dup_elim) => format!("DupElim({})", dup_elim.producer.as_string()),
+            Self::ApplyFunction(apply_function) => format!("ApplyFunction({})", apply_function.producer.as_string()),
+            Self::GroupBy(groupby) => format!("GroupBy({})", groupby.producer.as_string()),
+            Self::OrderBy(orderby) => format!("OrderBy({})", orderby.producer.as_string()),
+            Self::WriteOut(write_out) => format!("WriteOut({})", write_out.producer.as_string()),
+        }
+    }
+}
+
 impl Iterator for RelOp {
     type Item = Record;
 
@@ -33,6 +59,7 @@ impl Iterator for RelOp {
         macro_rules! impl_next {
             ($($variant:ident),*) => {
                 match self {
+                    RelOp::EmptyTableScan => None,
                     $(RelOp::$variant(op) => op.next(),)*
                 }
              };
@@ -445,14 +472,12 @@ impl WriteOut {
         use std::fs::File;
         use std::io::Write;
 
-        let buf = self
-            .producer
-            .by_ref()
-            .flat_map(|record| record.to_bytes())
-            .collect::<Vec<_>>();
-
         let mut file = File::create(&self.file).ok()?;
-        file.write_all(&buf).ok()?;
+
+        for record in self.producer.by_ref() {
+            let bytes = record.to_bytes();
+            file.write_all(&bytes).ok()?;
+        }
 
         None
     }

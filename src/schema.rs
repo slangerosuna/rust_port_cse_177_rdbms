@@ -117,6 +117,20 @@ impl Schema {
         true
     }
 
+    pub fn join_right(&mut self, other: &Schema) {
+        let other_attributes = other
+            .attributes
+            .iter()
+            .filter(|attr| self.index_of(&attr.name).is_none())
+            .collect::<Vec<_>>();
+
+        for attr in other_attributes {
+            self.attributes.push(attr.clone());
+        }
+
+        // TODO: Estimate the number of tuples in the joined schema
+    }
+
     pub fn index_of(&self, attribute: &str) -> Option<usize> {
         self.attributes
             .iter()

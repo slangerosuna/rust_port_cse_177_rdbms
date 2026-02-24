@@ -142,7 +142,7 @@ impl DBFile {
             .read(true)
             .truncate(true)
             .open(path)
-            .map_err(|_| anyhow!(""))?;
+            .map_err(|e| anyhow!("Failed to create file {:?}: {:?}", path, e))?;
 
         self.file = Some(file);
         self.current_page_pos = 0;
@@ -160,7 +160,7 @@ impl DBFile {
             .read(true)
             .write(true)
             .open(path)
-            .map_err(|_| anyhow!(""))?;
+            .map_err(|e| anyhow!("Failed to open file {:?}: {:?}", path, e))?;
 
         self.file = Some(file);
         self.current_page_pos = 0;
@@ -216,7 +216,7 @@ impl DBFile {
             self.current_page = Page::new();
 
             if !self.current_page.append(record) {
-                return Err(anyhow!(""));
+                return Err(anyhow!("failled to append record to new page"));
             }
         }
         Ok(())
@@ -225,7 +225,7 @@ impl DBFile {
     pub fn load(&mut self, schema: &Schema, text_file_path: &str) -> Result<()> {
         self.schema = Some(schema.clone());
 
-        let file = std::fs::File::open(text_file_path).map_err(|_| anyhow!(""))?;
+        let file = std::fs::File::open(text_file_path)?;
         let mut reader = BufReader::new(file);
 
         self.current_page_pos = 0;
@@ -245,18 +245,17 @@ impl DBFile {
     }
 
     fn load_page(&mut self, page_num: u64) -> Result<()> {
-        let file = self.file.as_mut().ok_or(anyhow!(""))?;
-        let schema = self.schema.as_ref().ok_or(anyhow!(""))?;
+        let file = self.file.as_mut().ok_or(anyhow!("DBFile.page is None"))?;
+        let schema = self.schema.as_ref().ok_or(anyhow!("DBFile.schema is None"))?;
 
-        file.seek(SeekFrom::Start(page_num * PAGE_SIZE as u64))
-            .map_err(|_| anyhow!(""))?;
+        file.seek(SeekFrom::Start(page_num * PAGE_SIZE as u64))?;
 
         let mut buffer = vec![0u8; PAGE_SIZE];
-        let bytes_read = file.read(&mut buffer).map_err(|_| anyhow!(""))?;
+        let bytes_read = file.read(&mut buffer)?;
 
         if bytes_read == 0 {
             self.current_page = Page::new();
-            return Err(anyhow!(""));
+            return Err(anyhow!("Failed to read page: reached end of file"));
         }
 
         self.current_page.from_binary(&buffer, schema)?;
@@ -266,12 +265,11 @@ impl DBFile {
     fn write_current_page(&mut self) -> Result<()> {
         let file = self.file.as_mut().ok_or(anyhow!(""))?;
 
-        file.seek(SeekFrom::Start(self.current_page_pos * PAGE_SIZE as u64))
-            .map_err(|_| anyhow!(""))?;
+        file.seek(SeekFrom::Start(self.current_page_pos * PAGE_SIZE as u64))?;
 
         let page_data = self.current_page.to_binary();
-        file.write_all(&page_data).map_err(|_| anyhow!(""))?;
-        file.flush().map_err(|_| anyhow!(""))?;
+        file.write_all(&page_data)?;
+        file.flush()?;
 
         Ok(())
     }

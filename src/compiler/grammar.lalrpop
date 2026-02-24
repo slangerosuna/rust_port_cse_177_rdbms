@@ -84,28 +84,12 @@ pub Query: Query = {
           on: Some(cond),
       }
   },
-  <left: Query> "INNER" "JOIN" <right: Query> => {
-      Query::Join {
-          join_type: JoinType::Inner,
-          left: Box::new(left),
-          right: Box::new(right),
-          on: None,
-      }
-  },
   <left: Query> "LEFT" "JOIN" <right: Query> "ON" <cond: Condition> => {
       Query::Join {
           join_type: JoinType::LeftOuter,
           left: Box::new(left),
           right: Box::new(right),
           on: Some(cond),
-      }
-  },
-  <left: Query> "LEFT" "JOIN" <right: Query> => {
-      Query::Join {
-          join_type: JoinType::LeftOuter,
-          left: Box::new(left),
-          right: Box::new(right),
-          on: None,
       }
   },
   <left: Query> "RIGHT" "JOIN" <right: Query> "ON" <cond: Condition> => {
@@ -116,28 +100,12 @@ pub Query: Query = {
           on: Some(cond),
       }
   },
-  <left: Query> "RIGHT" "JOIN" <right: Query> => {
-      Query::Join {
-          join_type: JoinType::RightOuter,
-          left: Box::new(left),
-          right: Box::new(right),
-          on: None,
-      }
-  },
   <left: Query> "FULL" "OUTER" "JOIN" <right: Query> "ON" <cond: Condition> => {
       Query::Join {
           join_type: JoinType::FullOuter,
           left: Box::new(left),
           right: Box::new(right),
           on: Some(cond),
-      }
-  },
-  <left: Query> "FULL" "OUTER" "JOIN" <right: Query> => {
-      Query::Join {
-          join_type: JoinType::FullOuter,
-          left: Box::new(left),
-          right: Box::new(right),
-          on: None,
       }
   },
 };
