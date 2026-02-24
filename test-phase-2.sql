@@ -1,1 +1,1 @@
-SELECT att1, att2, att3 FROM Example1, Example2, Example1, Example1
+SELECT att1, att2, att3 FROM (SELECT DISTINCT * FROM Example1, Example2)

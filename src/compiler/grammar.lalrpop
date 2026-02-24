@@ -4,14 +4,18 @@ use crate::compiler::Token;
 
 grammar;
 
-pub Query: Query = {
-#[precedence(level = "0")]
+pub Term: Query = {
   "(" <q: Query> ")" => q,
   <tables: NameList> => {
       Query::Scan {
           table_names: tables
       }
   },
+};
+
+pub Query: Query = {
+#[precedence(level = "0")]
+  Term,
 
 #[precedence(level = "1")]
   "SELECT" <atts: SelectAtts> "FROM" <sub_query: Query> "WHERE" <clause: Condition> => {
