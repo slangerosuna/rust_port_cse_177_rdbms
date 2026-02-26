@@ -1,11 +1,13 @@
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum Target {
     Left,
     Right,
     Literal,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum Type {
     Integer,
     Float,
@@ -25,16 +27,43 @@ impl std::fmt::Display for Type {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum CompOp {
     Less,
     LessEqual,
     Greater,
     GreaterEqual,
     Equal,
+    NotEqual,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+impl CompOp {
+    pub fn negation(&self) -> Self {
+        match self {
+            CompOp::Less => CompOp::GreaterEqual,
+            CompOp::LessEqual => CompOp::Greater,
+            CompOp::Greater => CompOp::LessEqual,
+            CompOp::GreaterEqual => CompOp::Less,
+            CompOp::Equal => CompOp::NotEqual,
+            CompOp::NotEqual => CompOp::Equal,
+        }
+    }
+
+    pub fn to_normal_form(&self) -> Self {
+        match self {
+            CompOp::Less => CompOp::Less,
+            CompOp::GreaterEqual => CompOp::Less,
+            CompOp::Greater => CompOp::Greater,
+            CompOp::LessEqual => CompOp::Greater,
+            CompOp::Equal => CompOp::Equal,
+            CompOp::NotEqual => CompOp::Equal,
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(u8)]
 pub enum FileType {
     Heap,
     Sorted,

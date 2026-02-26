@@ -66,12 +66,18 @@ impl<'a> QueryCompiler<'a> {
 
             let cnf = Cnf::extract_cnf(&schema, next_schema);
 
-            for comparison in cnf.and_list.iter() {
-                let left_distincts = schema.get_distincts(&schema.get_atts()[comparison.which_att1 as usize].name).unwrap_or(1) as f64;
-                let right_distincts = next_schema.get_distincts(&schema.get_atts()[comparison.which_att2 as usize].name).unwrap_or(1) as f64;
+            for comparison in cnf.comparisons() {
+                let left_distincts = schema
+                    .get_distincts(&schema.get_atts()[comparison.which_att1 as usize].name)
+                    .unwrap_or(1) as f64;
+                let right_distincts = next_schema
+                    .get_distincts(&schema.get_atts()[comparison.which_att2 as usize].name)
+                    .unwrap_or(1) as f64;
 
                 let max_distincts = f64::max(left_distincts, right_distincts);
-                if max_distincts != 0.0 { estimated_cost /= max_distincts; }
+                if max_distincts != 0.0 {
+                    estimated_cost /= max_distincts;
+                }
             }
 
             cost += estimated_cost;
@@ -82,7 +88,13 @@ impl<'a> QueryCompiler<'a> {
         cost as usize
     }
 
-    fn choose_join(&self, left: RelOp, right: RelOp, left_schema: &Schema, right_schema: &Schema) -> RelOp {
+    fn choose_join(
+        &self,
+        left: RelOp,
+        right: RelOp,
+        left_schema: &Schema,
+        right_schema: &Schema,
+    ) -> RelOp {
         // TODO: Implement the actual join choice logic based on the schemas and estimated costs
 
         RelOp::NestedLoopJoin(NestedLoopJoin {
@@ -95,10 +107,7 @@ impl<'a> QueryCompiler<'a> {
         })
     }
 
-    fn dynamic_scan_order(
-        &self,
-        scans: Vec<(Schema, RelOp)>,
-    ) -> anyhow::Result<(Schema, RelOp)> {
+    fn dynamic_scan_order(&self, scans: Vec<(Schema, RelOp)>) -> anyhow::Result<(Schema, RelOp)> {
         fn combinations<T: Clone>(items: Vec<T>) -> Vec<Vec<T>> {
             if items.is_empty() {
                 return vec![vec![]];
@@ -144,18 +153,12 @@ impl<'a> QueryCompiler<'a> {
         Ok((schema, relop))
     }
 
-    fn greedy_scan_order(
-        &self,
-        scans: Vec<(Schema, RelOp)>,
-    ) -> anyhow::Result<(Schema, RelOp)> {
+    fn greedy_scan_order(&self, scans: Vec<(Schema, RelOp)>) -> anyhow::Result<(Schema, RelOp)> {
         // TODO: Actually implement the greedy algorithm described in 16.6.6
         self.dynamic_scan_order(scans)
     }
 
-    fn optimal_scan_relop(
-        &self,
-        table_names: &[String],
-    ) -> anyhow::Result<(Schema, RelOp)> {
+    fn optimal_scan_relop(&self, table_names: &[String]) -> anyhow::Result<(Schema, RelOp)> {
         let scans = table_names
             .iter()
             .map(|table_name| {
@@ -165,10 +168,9 @@ impl<'a> QueryCompiler<'a> {
                     .ok_or_else(|| anyhow::anyhow!("Table '{}' not found in catalog", table_name))?
                     .clone();
 
-                let path = self
-                    .catalog
-                    .get_data_file(&table_name)
-                    .ok_or_else(|| anyhow::anyhow!("Data file for table '{}' not found in catalog", table_name))?;
+                let path = self.catalog.get_data_file(&table_name).ok_or_else(|| {
+                    anyhow::anyhow!("Data file for table '{}' not found in catalog", table_name)
+                })?;
 
                 if path == "" {
                     Ok((schema, RelOp::EmptyTableScan))
@@ -194,6 +196,8 @@ impl<'a> QueryCompiler<'a> {
         condition: &ast::Condition,
         schema: &Schema,
     ) -> anyhow::Result<(Cnf, Record)> {
+        // For now, does not work with situations that require the use of `Function`
+
         todo!()
     }
 
@@ -222,10 +226,9 @@ impl<'a> QueryCompiler<'a> {
                     let atts_to_keep = atts
                         .iter()
                         .map(|att| {
-                            schema
-                                .index_of(att)
-                                .map(|i| i as i32)
-                                .ok_or_else(|| anyhow::anyhow!("Attribute '{}' not found in schema", att))
+                            schema.index_of(att).map(|i| i as i32).ok_or_else(|| {
+                                anyhow::anyhow!("Attribute '{}' not found in schema", att)
+                            })
                         })
                         .collect::<anyhow::Result<Vec<_>>>()?;
 

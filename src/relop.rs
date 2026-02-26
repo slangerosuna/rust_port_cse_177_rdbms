@@ -40,11 +40,25 @@ impl RelOp {
             Self::EmptyTableScan => "EmptyTableScan".to_string(),
             Self::Select(select) => format!("Select({})", select.producer.as_string()),
             Self::Project(project) => format!("Project({})", project.producer.as_string()),
-            Self::NestedLoopJoin(join) => format!("({} ⨝ {})", join.left_producer.as_string(), join.right_producer.as_string()),
-            Self::MergeJoin(join) => format!("({} ⨝ {})", join.left_producer.as_string(), join.right_producer.as_string()),
-            Self::HashJoin(join) => format!("({} ⨝ {})", join.left_producer.as_string(), join.right_producer.as_string()),
+            Self::NestedLoopJoin(join) => format!(
+                "({} ⨝ {})",
+                join.left_producer.as_string(),
+                join.right_producer.as_string()
+            ),
+            Self::MergeJoin(join) => format!(
+                "({} ⨝ {})",
+                join.left_producer.as_string(),
+                join.right_producer.as_string()
+            ),
+            Self::HashJoin(join) => format!(
+                "({} ⨝ {})",
+                join.left_producer.as_string(),
+                join.right_producer.as_string()
+            ),
             Self::DupElim(dup_elim) => format!("DupElim({})", dup_elim.producer.as_string()),
-            Self::ApplyFunction(apply_function) => format!("ApplyFunction({})", apply_function.producer.as_string()),
+            Self::ApplyFunction(apply_function) => {
+                format!("ApplyFunction({})", apply_function.producer.as_string())
+            }
             Self::GroupBy(groupby) => format!("GroupBy({})", groupby.producer.as_string()),
             Self::OrderBy(orderby) => format!("OrderBy({})", orderby.producer.as_string()),
             Self::WriteOut(write_out) => format!("WriteOut({})", write_out.producer.as_string()),

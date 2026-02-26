@@ -121,8 +121,7 @@ impl Schema {
         let (other_attributes, join_attributes) = other
             .attributes
             .iter()
-            .partition(|attr| self.index_of(&attr.name).is_none())
-            .collect::<Vec<_>>();
+            .partition::<Vec<_>, _>(|attr| self.index_of(&attr.name).is_none());
 
         for attr in other_attributes {
             self.attributes.push(attr.clone());

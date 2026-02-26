@@ -246,7 +246,10 @@ impl DBFile {
 
     fn load_page(&mut self, page_num: u64) -> Result<()> {
         let file = self.file.as_mut().ok_or(anyhow!("DBFile.page is None"))?;
-        let schema = self.schema.as_ref().ok_or(anyhow!("DBFile.schema is None"))?;
+        let schema = self
+            .schema
+            .as_ref()
+            .ok_or(anyhow!("DBFile.schema is None"))?;
 
         file.seek(SeekFrom::Start(page_num * PAGE_SIZE as u64))?;
 
