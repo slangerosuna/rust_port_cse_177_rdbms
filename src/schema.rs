@@ -118,17 +118,33 @@ impl Schema {
     }
 
     pub fn join_right(&mut self, other: &Schema) {
-        let other_attributes = other
+        let (other_attributes, join_attributes) = other
             .attributes
             .iter()
-            .filter(|attr| self.index_of(&attr.name).is_none())
+            .partition(|attr| self.index_of(&attr.name).is_none())
             .collect::<Vec<_>>();
 
         for attr in other_attributes {
             self.attributes.push(attr.clone());
         }
 
-        // TODO: Estimate the number of tuples in the joined schema
+        let mut no_tuples = self.no_tuples * other.no_tuples;
+
+        for attr in join_attributes {
+            let index = self.index_of(&attr.name).unwrap();
+            let self_distincts = self.attributes[index].no_distinct as f64;
+
+            let index = other.index_of(&attr.name).unwrap();
+            let other_distincts = other.attributes[index].no_distinct as f64;
+
+            let max_distincts = f64::max(self_distincts, other_distincts);
+
+            if max_distincts != 0.0 {
+                no_tuples = (no_tuples as f64 / max_distincts) as i32;
+            }
+        }
+
+        self.no_tuples = no_tuples;
     }
 
     pub fn index_of(&self, attribute: &str) -> Option<usize> {

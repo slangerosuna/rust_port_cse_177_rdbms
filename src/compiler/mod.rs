@@ -53,7 +53,7 @@ impl<'a> QueryCompiler<'a> {
     // Assumes left-deep join trees
     fn compute_join_cost(&self, combo: &[usize], scans: &[(Schema, RelOp)]) -> usize {
         let mut schema = scans[combo[0]].0.clone();
-        let mut cost = 0;
+        let mut cost = 0.0;
 
         for i in 1..combo.len() {
             let next_schema = &scans[combo[i]].0;
@@ -74,11 +74,12 @@ impl<'a> QueryCompiler<'a> {
                 if max_distincts != 0.0 { estimated_cost /= max_distincts; }
             }
 
-            cost += estimated_cost as usize;
+            cost += estimated_cost;
             schema.join_right(&scans[combo[i]].0);
         }
 
-        cost
+        // using usize instead of f64 here because it impls Ord
+        cost as usize
     }
 
     fn choose_join(&self, left: RelOp, right: RelOp, left_schema: &Schema, right_schema: &Schema) -> RelOp {
@@ -127,7 +128,6 @@ impl<'a> QueryCompiler<'a> {
             .max_by_key(|(_, cost)| *cost)
             .ok_or_else(|| anyhow::anyhow!("No scan combinations found"))?;
 
-        // TODO: estimate effect on no_tuples and update schema accordingly
         let mut scans: Vec<_> = scans.into_iter().map(Some).collect();
 
         let (mut schema, mut relop) = scans[combo[0]].take().unwrap();
@@ -229,12 +229,16 @@ impl<'a> QueryCompiler<'a> {
                         })
                         .collect::<anyhow::Result<Vec<_>>>()?;
 
-                    schema.project(&atts_to_keep);
+                    // checks whether or not the projection is the identity operation, in which
+                    // case we can ignore it
+                    if !(atts_to_keep == (0..schema.get_num_atts() as i32).collect::<Vec<_>>()) {
+                        schema.project(&atts_to_keep);
 
-                    producer = RelOp::Project(Project {
-                        producer: Box::new(producer),
-                        atts_to_keep,
-                    });
+                        producer = RelOp::Project(Project {
+                            producer: Box::new(producer),
+                            atts_to_keep,
+                        });
+                    }
                 }
 
                 if distinct {
