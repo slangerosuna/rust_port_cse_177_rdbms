@@ -58,6 +58,12 @@ pub enum JoinType {
 pub enum SelectAtts {
     Star,
     Atts(Vec<String>),
+    Aggregate(Aggregate),
+}
+
+#[derive(Debug)]
+pub enum Aggregate {
+    Sum(ArithExpr),
 }
 
 #[derive(Debug)]

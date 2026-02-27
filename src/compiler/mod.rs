@@ -2,6 +2,8 @@ use crate::*;
 use lalrpop_util::*;
 
 mod ast;
+use ast::*;
+
 mod lexer;
 
 lalrpop_mod!(
@@ -176,7 +178,12 @@ impl<'a> QueryCompiler<'a> {
                     Ok((schema, RelOp::EmptyTableScan))
                 } else {
                     let mut file = DBFile::new();
-                    file.open(&path)?;
+                    if let Err(e) = file.open(&path) {
+                        // TODO: Make it actually fail, for now we just print the error and
+                        // continue with an empty scan as we just want the query plan to be
+                        // generated
+                        println!("{e}");
+                    }
                     let scan = RelOp::Scan(Scan { file });
 
                     Ok((schema, scan))
@@ -196,9 +203,128 @@ impl<'a> QueryCompiler<'a> {
         condition: &ast::Condition,
         schema: &Schema,
     ) -> anyhow::Result<(Cnf, Record)> {
-        // For now, does not work with situations that require the use of `Function`
+        match condition {
+            Condition::And(left, right) => {
+                let (mut left_cnf, mut left_constants) = self.compile_condition(&left, schema)?;
+                let (mut right_cnf, right_constants) = self.compile_condition(&right, schema)?;
 
-        todo!()
+                right_cnf.increase_constants_offset(left_constants.len());
+                left_cnf *= right_cnf;
+                left_constants.merge_right(&right_constants);
+
+                Ok((left_cnf, left_constants))
+            }
+            Condition::Or(left, right) => {
+                let (mut left_cnf, mut left_constants) = self.compile_condition(&left, schema)?;
+                let (mut right_cnf, right_constants) = self.compile_condition(&right, schema)?;
+
+                right_cnf.increase_constants_offset(left_constants.len());
+                left_cnf += right_cnf;
+                left_constants.merge_right(&right_constants);
+
+                Ok((left_cnf, left_constants))
+            }
+            Condition::Not(internal) => {
+                let (cnf, constants) = self.compile_condition(&internal, schema)?;
+                let cnf = cnf.negation();
+
+                Ok((cnf, constants))
+            }
+
+            Condition::BoolLiteral(value) => {
+                let cnf = if *value {
+                    Cnf::new()
+                } else {
+                    Cnf::new().negation()
+                };
+
+                Ok((cnf, Record::new()))
+            }
+            Condition::Comparison(left, right, op) => {
+                let mut record = Record::new();
+
+                let mut att_type = None;
+
+                macro_rules! get_expr_target {
+                    ($value: ident) => (match $value.as_ref() {
+                        ConditionExpr::StrLit(lit) => {
+                            if let Some(att_type) = att_type {
+                                if att_type != Type::String {
+                                    anyhow::bail!("Type mismatch in condition: expected {:?}, found STRING literal", att_type);
+                                }
+                            } else {
+                                att_type = Some(Type::String);
+                            }
+                            record.push_str(lit);
+                            (Target::Literal, (record.len() - 1) as i32)
+                        },
+                        ConditionExpr::Arith(arith) => {
+                            match arith {
+                                ArithExpr::IntLit(value) => {
+                                    if let Some(att_type) = att_type {
+                                        if att_type != Type::Integer {
+                                            anyhow::bail!("Type mismatch in condition: expected {:?}, found INT literal", att_type);
+                                        }
+                                    } else {
+                                        att_type = Some(Type::Integer);
+                                    }
+
+                                    record.push_int(*value);
+                                    (Target::Literal, (record.len() - 1) as i32)
+                                },
+                                ArithExpr::FltLit(value) => {
+                                    if let Some(att_type) = att_type {
+                                        if att_type != Type::Float {
+                                            anyhow::bail!("Type mismatch in condition: expected {:?}, found FLT literal", att_type);
+                                        }
+                                    } else {
+                                        att_type = Some(Type::Float);
+                                    }
+
+                                    record.push_flt(*value);
+                                    (Target::Literal, (record.len() - 1) as i32)
+                                },
+                                ArithExpr::Load(att) => {
+                                    let att_index = schema.index_of(att).ok_or_else(|| {
+                                        anyhow::anyhow!("Attribute '{}' not found in schema", att)
+                                    })?;
+
+                                    let att_type_in_schema = schema.get_atts()[att_index].type_;
+
+                                    if let Some(att_type) = att_type {
+                                        if att_type != att_type_in_schema {
+                                            anyhow::bail!("Type mismatch in condition: expected {:?}, found attribute '{}' of type {:?}", att_type, att, att_type_in_schema);
+                                        }
+                                    } else {
+                                        att_type = Some(att_type_in_schema);
+                                    }
+
+                                    (Target::Left, att_index as i32)
+                                },
+
+                                _ => anyhow::bail!("Unsupported arithmetic expression in condition"),
+                            }
+                        },
+                    })
+                }
+
+                let (operand1, which_att1) = get_expr_target!(left);
+                let (operand2, which_att2) = get_expr_target!(right);
+
+                let comparison = Comparison {
+                    operand1,
+                    which_att1,
+
+                    operand2,
+                    which_att2,
+
+                    att_type: att_type.unwrap(),
+                    op: *op,
+                };
+
+                Ok((comparison.into(), record))
+            }
+        }
     }
 
     fn compile_ast(&self, query: ast::Query) -> anyhow::Result<(Schema, RelOp)> {

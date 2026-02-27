@@ -6,7 +6,7 @@ use itertools::izip;
 pub struct Attribute {
     pub name: String,
     pub type_: Type,
-    pub no_distinct: i32,
+    pub no_distinct: u64,
 }
 
 // This handles Attribue::Attribute()
@@ -22,7 +22,7 @@ impl Default for Attribute {
 
 #[derive(Default, Clone, Debug)]
 pub struct Schema {
-    no_tuples: i32,
+    no_tuples: u64,
     f_path: String,
     attributes: Vec<Attribute>,
 }
@@ -31,8 +31,8 @@ impl Schema {
     pub fn new(
         attributes: &[String],
         attribute_types: &[String],
-        distincts: &[i32],
-        no_tuples: i32,
+        distincts: &[u64],
+        no_tuples: u64,
         f_path: String,
     ) -> Self {
         let attributes = izip!(attributes, attribute_types, distincts)
@@ -64,14 +64,14 @@ impl Schema {
         }
     }
 
-    pub fn new_no_attributes(no_tuples: i32, f_path: String) -> Self {
+    pub fn new_no_attributes(no_tuples: u64, f_path: String) -> Self {
         Self::new(&[], &[], &[], no_tuples, f_path)
     }
 
     pub fn from_attributes(
         attributes: &[String],
         attribute_types: &[String],
-        distincts: &[i32],
+        distincts: &[u64],
     ) -> Self {
         Self::new(attributes, attribute_types, distincts, 0, "".to_string())
     }
@@ -89,7 +89,7 @@ impl Schema {
         &self.attributes
     }
 
-    pub fn get_no_tuples(&self) -> i32 {
+    pub fn get_no_tuples(&self) -> u64 {
         self.no_tuples
     }
 
@@ -97,7 +97,7 @@ impl Schema {
         &self.f_path
     }
 
-    pub fn set_no_tuples(&mut self, no_tuples: i32) {
+    pub fn set_no_tuples(&mut self, no_tuples: u64) {
         self.no_tuples = no_tuples;
     }
 
@@ -117,6 +117,7 @@ impl Schema {
         true
     }
 
+    // used for natural joins
     pub fn join_right(&mut self, other: &Schema) {
         let (other_attributes, join_attributes) = other
             .attributes
@@ -127,7 +128,7 @@ impl Schema {
             self.attributes.push(attr.clone());
         }
 
-        let mut no_tuples = self.no_tuples * other.no_tuples;
+        let mut no_tuples: f64 = (self.no_tuples * other.no_tuples) as f64;
 
         for attr in join_attributes {
             let index = self.index_of(&attr.name).unwrap();
@@ -139,11 +140,11 @@ impl Schema {
             let max_distincts = f64::max(self_distincts, other_distincts);
 
             if max_distincts != 0.0 {
-                no_tuples = (no_tuples as f64 / max_distincts) as i32;
+                no_tuples /= max_distincts;
             }
         }
 
-        self.no_tuples = no_tuples;
+        self.no_tuples = no_tuples as u64;
     }
 
     pub fn index_of(&self, attribute: &str) -> Option<usize> {
@@ -157,12 +158,12 @@ impl Schema {
             .map(|index| self.attributes[index].type_)
     }
 
-    pub fn get_distincts(&self, attribute: &str) -> Option<i32> {
+    pub fn get_distincts(&self, attribute: &str) -> Option<u64> {
         self.index_of(attribute)
             .map(|index| self.attributes[index].no_distinct)
     }
 
-    pub fn set_distincts(&mut self, attribute: &str, no_distinct: i32) -> bool {
+    pub fn set_distincts(&mut self, attribute: &str, no_distinct: u64) -> bool {
         self.index_of(attribute)
             .map(|index| {
                 self.attributes[index].no_distinct = no_distinct;

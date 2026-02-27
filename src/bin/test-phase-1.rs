@@ -75,12 +75,12 @@ fn main() -> Result<()> {
         for j in 0..table_att_no {
             let dist = (i + 1) * 10 + j;
             println!("{} distinct = {}", atts[j], dist);
-            catalog.set_no_distinct(&table_name, &atts[j], dist as i32);
+            catalog.set_no_distinct(&table_name, &atts[j], dist as u64);
         }
 
         let tuples = (i + 1) * 1000;
         println!("tuples = {tuples}");
-        catalog.set_no_tuples(&table_name, tuples as i32);
+        catalog.set_no_tuples(&table_name, tuples as u64);
 
         let path = format!("{table_name}.dat");
         println!("path = {path}");

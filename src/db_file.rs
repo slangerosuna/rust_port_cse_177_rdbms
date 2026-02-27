@@ -156,7 +156,7 @@ impl DBFile {
         let path = file_path.as_ref();
         self.file_name = path.to_string_lossy().to_string();
 
-        /*let file = OpenOptions::new()
+        let file = OpenOptions::new()
             .read(true)
             .write(true)
             .open(path)
@@ -167,7 +167,7 @@ impl DBFile {
         self.current_page = Page::new();
         self.is_open = true;
 
-        self.move_first();*/
+        self.move_first();
 
         Ok(())
     }

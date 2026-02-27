@@ -146,6 +146,10 @@ impl Record {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
     pub unsafe fn get_raw_attr_data_unchecked(&self, index: usize) -> AttrData {
         self.data[index]
     }
@@ -307,6 +311,25 @@ impl Record {
                 }
             }
         }
+    }
+
+    pub fn push_str(&mut self, val: &str) {
+        self.kinds.push(AttrType::String);
+        self.data.push(AttrData {
+            string: self.strbuf.len(),
+        });
+        self.strbuf.push_str(val);
+        self.strbuf.push('\0');
+    }
+
+    pub fn push_int(&mut self, val: i64) {
+        self.kinds.push(AttrType::Integer);
+        self.data.push(AttrData { integer: val });
+    }
+
+    pub fn push_flt(&mut self, val: f64) {
+        self.kinds.push(AttrType::Float);
+        self.data.push(AttrData { float: val });
     }
 
     pub fn merge_left(&mut self, other: &Record) {

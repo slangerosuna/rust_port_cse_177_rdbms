@@ -52,7 +52,7 @@ impl RelOp {
                     &append_to_line_start(
                         &$producer.as_string(),
                         "\u{2502} "
-                    )[4..],
+                    )[4..], // 4.. because \u{2502} is 3 bytes
                     format_producers!($($producers),+)
                 )
             };
@@ -70,18 +70,25 @@ impl RelOp {
 
             RelOp::Select(select) => format_with_producers!("Select", select.producer),
             RelOp::Project(project) => format_with_producers!("Project", project.producer),
-            RelOp::NestedLoopJoin(join) => format_with_producers!("NestedLoopJoin", join.left_producer, join.right_producer),
-            RelOp::MergeJoin(join) => format_with_producers!("MergeJoin", join.left_producer, join.right_producer),
-            RelOp::HashJoin(join) => format_with_producers!("HashJoin", join.left_producer, join.right_producer),
+            RelOp::NestedLoopJoin(join) => {
+                format_with_producers!("NestedLoopJoin", join.left_producer, join.right_producer)
+            }
+            RelOp::MergeJoin(join) => {
+                format_with_producers!("MergeJoin", join.left_producer, join.right_producer)
+            }
+            RelOp::HashJoin(join) => {
+                format_with_producers!("HashJoin", join.left_producer, join.right_producer)
+            }
             RelOp::DupElim(dup_elim) => format_with_producers!("DupElim", dup_elim.producer),
-            RelOp::ApplyFunction(apply_function) => format_with_producers!("ApplyFunction", apply_function.producer),
+            RelOp::ApplyFunction(apply_function) => {
+                format_with_producers!("ApplyFunction", apply_function.producer)
+            }
             RelOp::GroupBy(group_by) => format_with_producers!("GroupBy", group_by.producer),
             RelOp::OrderBy(order_by) => format_with_producers!("OrderBy", order_by.producer),
             RelOp::WriteOut(write_out) => format_with_producers!("WriteOut", write_out.producer),
         }
     }
 }
-
 
 impl Iterator for RelOp {
     type Item = Record;

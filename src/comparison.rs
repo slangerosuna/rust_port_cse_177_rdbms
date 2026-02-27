@@ -40,17 +40,25 @@ impl Disjunction {
             .any(|comparison| comparison.run(left, right))
     }
 
-    pub fn combine(&mut self, other: Disjunction) {
-        for comparison in other.or_list {
-            self.or_list.push(comparison);
+    pub fn or(lhs: &Disjunction, rhs: &Disjunction) -> Option<Disjunction> {
+        if rhs
+            .or_list
+            .iter()
+            .any(|rhs| lhs.or_list.iter().any(|lhs| lhs.is_negation(rhs)))
+        {
+            // A + ~A = 1, so the whole disjunction is always true, and we can ignore it in CNF
+            return None;
         }
 
-        self.or_list.sort();
-    }
+        let or_list = rhs
+            .or_list
+            .iter()
+            .filter(|rhs| !lhs.or_list.iter().any(|lhs| lhs.is_equivalent(rhs)))
+            .cloned()
+            .chain(lhs.or_list.iter().cloned())
+            .collect();
 
-    pub fn insert(&mut self, other: Comparison) {
-        let idx = self.or_list.partition_point(|term| term <= &other);
-        self.or_list.insert(idx, other);
+        Some(Disjunction { or_list })
     }
 
     pub fn negation(self) -> Cnf {
@@ -82,7 +90,7 @@ impl Into<Disjunction> for Comparison {
 impl Into<Cnf> for Disjunction {
     fn into(self) -> Cnf {
         let mut cnf = Cnf::new();
-        cnf.and_list.insert(self);
+        cnf.and_list.push(self);
         cnf
     }
 }
@@ -105,63 +113,30 @@ impl_add_for_cnf!(Comparison);
 impl_add_for_cnf!(Disjunction);
 impl_add_for_cnf!(Cnf);
 
-fn contains_term_not_in(disjunction: &Disjunction, cnf: &Cnf) -> bool {
-    disjunction
-        .or_list
-        .iter()
-        .any(|unique| cnf.comparisons().all(|term| term.handles_same_term(unique)))
-}
-
-fn pcnf(cnf: Vec<Disjunction>) -> HashSet<Disjunction> {
-    let mut all_vars: HashSet<Comparison> = cnf
-        .iter()
-        .flat_map(|disjunction| disjunction.or_list.iter())
-        .map(|comparison| comparison.to_normal_form())
-        .collect();
-
-    let mut result = HashSet::new();
-
-    for clause in cnf {
-        let present: HashSet<_> = clause.or_list
-            .iter()
-            .map(|term| term.to_normal_form())
-            .collect();
-
-        let missing: Vec<_> = all_vars
-            .difference(&present)
-            .cloned()
-            .collect();
-
-        /*missing
-            .fold(vec![clause], |clauses, var|)*/
-    }
-
-    result
-}
-
 impl<T: Into<Cnf>> AddAssign<T> for Cnf {
     fn add_assign(&mut self, rhs: T) {
-        let mut rhs = rhs.into();
-
-        self.and_list.retain(|maxterm| {
-            rhs.and_list.contains(maxterm) || contains_term_not_in(maxterm, &rhs)
-        });
-        rhs.and_list
-            .retain(|maxterm| contains_term_not_in(maxterm, &self));
-
-        if rhs.and_list.len() == 0 {
+        let rhs = rhs.into();
+        if rhs.is_false {
             return;
         }
 
-        let mut non_principal_cnf: Vec<_> = self.and_list.drain().collect();
-
-        for rhs in rhs.and_list {
-            for i in 0..non_principal_cnf.len() {
-                non_principal_cnf[i].combine(rhs.clone());
-            }
+        if self.is_false {
+            *self = rhs;
+            return;
         }
 
-        self.and_list.extend(pcnf(non_principal_cnf).into_iter());
+        self.and_list = self
+            .and_list
+            .iter()
+            .flat_map(|disjunction| {
+                rhs.and_list
+                    .iter()
+                    .filter_map(|rhs_disjunction| Disjunction::or(disjunction, rhs_disjunction))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+
+        self.minimize();
     }
 }
 
@@ -184,20 +159,59 @@ impl_mul_for_cnf!(Cnf);
 impl<T: Into<Cnf>> MulAssign<T> for Cnf {
     fn mul_assign(&mut self, rhs: T) {
         let rhs = rhs.into();
-        self.and_list.extend(rhs.and_list.into_iter());
+        if self.is_false {
+            return;
+        }
+        if rhs.is_false {
+            *self = Cnf {
+                and_list: Vec::new(),
+                is_false: true,
+            };
+            return;
+        }
 
-        let cnf = self.and_list.drain().collect::<Vec<_>>();
-        self.and_list.extend(pcnf(cnf).into_iter());
+        self.and_list.extend_from_slice(rhs.and_list.as_slice());
+
+        self.minimize();
     }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cnf {
-    pub and_list: HashSet<Disjunction>,
+    pub and_list: Vec<Disjunction>,
+    pub is_false: bool,
 }
 
 impl Cnf {
+    pub fn increase_constants_offset(&mut self, offset: usize) {
+        for disjunction in &mut self.and_list {
+            for comparison in &mut disjunction.or_list {
+                if comparison.operand1 == Target::Literal {
+                    comparison.which_att1 += offset as i32;
+                }
+                if comparison.operand2 == Target::Literal {
+                    comparison.which_att2 += offset as i32;
+                }
+            }
+        }
+    }
+
+    pub fn minimize(&mut self) {
+        // TODO:
+    }
+
     pub fn negation(self) -> Cnf {
+        if self.is_false {
+            return Cnf::new();
+        }
+
+        if self.and_list.is_empty() {
+            return Cnf {
+                and_list: Vec::new(),
+                is_false: true,
+            };
+        }
+
         self.and_list
             .into_iter()
             .map(|disjunction| disjunction.negation())
@@ -220,7 +234,8 @@ impl Cnf {
 
     pub fn new() -> Self {
         Self {
-            and_list: HashSet::new(),
+            and_list: Vec::new(),
+            is_false: false,
         }
     }
 
@@ -284,6 +299,10 @@ impl Cnf {
     }
 
     pub fn run(&self, left: &Record, right: &Record) -> bool {
+        if self.is_false {
+            return false;
+        }
+
         self.and_list
             .iter()
             .all(|disjunction| disjunction.run(left, right))
@@ -340,7 +359,38 @@ impl Ord for Comparison {
 }
 
 impl Comparison {
-    pub fn cmp(lhs: &Self, rhs: &Self) -> std::cmp::Ordering {
+    fn is_negation(&self, other: &Comparison) -> bool {
+        match self.op {
+            CompOp::Less | CompOp::Greater | CompOp::GreaterEqual | CompOp::LessEqual => {
+                (self.op == other.op
+                    && self.operand1 == other.operand2
+                    && self.which_att1 == other.which_att2
+                    && self.operand2 == other.operand1
+                    && self.which_att2 == other.which_att1
+                    && self.att_type == other.att_type)
+                    || (self.op == other.op.negation()
+                        && self.operand1 == other.operand1
+                        && self.which_att1 == other.which_att1
+                        && self.operand2 == other.operand2
+                        && self.which_att2 == other.which_att2
+                        && self.att_type == other.att_type)
+            }
+            CompOp::Equal | CompOp::NotEqual => {
+                (self.op == CompOp::Equal
+                    && other.op == CompOp::NotEqual
+                    && self.handles_same_term(other))
+                    || (self.op == CompOp::NotEqual
+                        && other.op == CompOp::Equal
+                        && self.handles_same_term(other))
+            }
+        }
+    }
+
+    fn is_equivalent(&self, other: &Comparison) -> bool {
+        self.handles_same_term(other) && !self.is_negation(other)
+    }
+
+    fn cmp(lhs: &Self, rhs: &Self) -> std::cmp::Ordering {
         let (lhs, rhs) = (lhs.to_normal_form(), rhs.to_normal_form());
 
         if lhs.which_att1 != rhs.which_att1 {
@@ -373,7 +423,6 @@ impl Comparison {
         } else {
             (self.operand1 as u8) > (self.operand2 as u8)
         };
-
 
         if should_swap_operands {
             Self {

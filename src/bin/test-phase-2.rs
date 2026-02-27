@@ -15,13 +15,17 @@ fn read_file_to_string(filename: &str) -> Result<String> {
 fn main() -> Result<()> {
     let catalog_sql = read_file_to_string("01-catalog.sql")?;
 
-    let mut catalog = Catalog::catalog_from_sql(&catalog_sql)?;
+    let catalog = Catalog::catalog_from_sql(&catalog_sql)?;
     let compiler = QueryCompiler::new(&catalog);
 
     let queries = read_file_to_string("all.sql")?;
 
     for query in queries.split(";") {
         let query = query.trim();
+        if query.is_empty() {
+            continue;
+        }
+
         println!("Query: {}", query);
         let query_execution_tree = match compiler.compile(&query) {
             Ok(query_execution_tree) => query_execution_tree,

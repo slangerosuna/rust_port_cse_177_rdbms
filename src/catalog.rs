@@ -42,7 +42,7 @@ impl Catalog {
 
         while let Some(row) = rows.next()? {
             let table_name: String = row.get("name")?;
-            let num_tuples: i32 = row.get("num_tuples")?;
+            let num_tuples: u64 = row.get("num_tuples")?;
             let filepath: String = row.get("file")?;
 
             table_schema.insert(table_name, Schema::new_no_attributes(num_tuples, filepath));
@@ -56,9 +56,9 @@ impl Catalog {
 
         while let Some(row) = rows.next()? {
             let name: String = row.get("name")?;
-            let position: i32 = row.get("position")?;
+            let position: u64 = row.get("position")?;
             let type_: String = row.get("type")?;
-            let num_distinct: i32 = row.get("num_distinct")?;
+            let num_distinct: u64 = row.get("num_distinct")?;
             let table_name: String = row.get("table_name")?;
 
             if position as usize != table_schema.get(&table_name).unwrap().get_num_atts() {
@@ -77,10 +77,7 @@ impl Catalog {
         drop(rows);
         stmt.finalize()?;
 
-        Ok(Catalog {
-            table_schema,
-            conn,
-        })
+        Ok(Catalog { table_schema, conn })
     }
 
     pub fn save(&mut self) -> Result<()> {
@@ -95,7 +92,7 @@ impl Catalog {
         let mut stmt = self.conn.prepare("INSERT INTO Tables VALUES(?, ?, ?);")?;
 
         for (table_name, schema) in self.table_schema.iter() {
-            let num_tuples = schema.get_no_tuples() as i32;
+            let num_tuples = schema.get_no_tuples();
             let f_path = schema.get_f_path();
 
             stmt.execute(params![table_name, num_tuples, f_path]);
@@ -137,11 +134,11 @@ impl Catalog {
         Ok(())
     }
 
-    pub fn get_no_tuples(&self, table: &str) -> Option<i32> {
+    pub fn get_no_tuples(&self, table: &str) -> Option<u64> {
         Some(self.table_schema.get(table)?.get_no_tuples())
     }
 
-    pub fn set_no_tuples(&mut self, table: &str, no_tuples: i32) -> bool {
+    pub fn set_no_tuples(&mut self, table: &str, no_tuples: u64) -> bool {
         let Some(schema) = self.table_schema.get_mut(table) else {
             return false;
         };
@@ -163,11 +160,11 @@ impl Catalog {
         true
     }
 
-    pub fn get_no_distinct(&self, table: &str, attribute: &str) -> Option<i32> {
+    pub fn get_no_distinct(&self, table: &str, attribute: &str) -> Option<u64> {
         self.table_schema.get(table)?.get_distincts(attribute)
     }
 
-    pub fn set_no_distinct(&mut self, table: &str, attribute: &str, no_distinct: i32) -> bool {
+    pub fn set_no_distinct(&mut self, table: &str, attribute: &str, no_distinct: u64) -> bool {
         let Some(schema) = self.table_schema.get_mut(table) else {
             return false;
         };

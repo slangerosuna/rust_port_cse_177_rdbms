@@ -117,6 +117,7 @@ pub Query: Query = {
 pub SelectAtts: SelectAtts = {
     "(" <atts: SelectAtts> ")" => atts,
     "*" => SelectAtts::Star,
+    "SUM" "(" <expr: ArithExpr> ")" => SelectAtts::Aggregate(Aggregate::Sum(expr)),
     <names: NameList> => SelectAtts::Atts(names),
 };
 
