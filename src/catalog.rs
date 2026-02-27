@@ -10,7 +10,6 @@ use anyhow::{Result, anyhow};
 use rusqlite::{Connection, params};
 
 pub struct Catalog {
-    filename: String,
     conn: Connection,
 
     table_schema: HashMap<String, Schema>,
@@ -19,6 +18,18 @@ pub struct Catalog {
 impl Catalog {
     pub fn open(filename: String) -> Result<Self> {
         let mut conn = Connection::open(&filename)?;
+
+        Self::from_conn(conn)
+    }
+
+    pub fn catalog_from_sql(sql: &str) -> Result<Self> {
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch(sql)?;
+
+        Self::from_conn(conn)
+    }
+
+    pub fn from_conn(mut conn: Connection) -> Result<Self> {
         let mut table_schema = HashMap::new();
 
         conn.execute_batch("
@@ -67,7 +78,6 @@ impl Catalog {
         stmt.finalize()?;
 
         Ok(Catalog {
-            filename,
             table_schema,
             conn,
         })

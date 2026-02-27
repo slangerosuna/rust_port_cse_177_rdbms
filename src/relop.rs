@@ -35,36 +35,53 @@ pub enum RelOp {
 
 impl RelOp {
     fn as_string(&self) -> String {
-        match self {
-            Self::Scan(scan) => format!("Scan({})", scan.file.get_file_name()),
-            Self::EmptyTableScan => "EmptyTableScan".to_string(),
-            Self::Select(select) => format!("Select({})", select.producer.as_string()),
-            Self::Project(project) => format!("Project({})", project.producer.as_string()),
-            Self::NestedLoopJoin(join) => format!(
-                "({} ⨝ {})",
-                join.left_producer.as_string(),
-                join.right_producer.as_string()
-            ),
-            Self::MergeJoin(join) => format!(
-                "({} ⨝ {})",
-                join.left_producer.as_string(),
-                join.right_producer.as_string()
-            ),
-            Self::HashJoin(join) => format!(
-                "({} ⨝ {})",
-                join.left_producer.as_string(),
-                join.right_producer.as_string()
-            ),
-            Self::DupElim(dup_elim) => format!("DupElim({})", dup_elim.producer.as_string()),
-            Self::ApplyFunction(apply_function) => {
-                format!("ApplyFunction({})", apply_function.producer.as_string())
+        fn append_to_line_start(s: &str, line_start: &str) -> String {
+            s.lines()
+                .map(|line| format!("{line_start}{line}"))
+                .reduce(|a, b| format!("{a}\n{b}"))
+                .unwrap_or_else(String::new)
+        }
+
+        macro_rules! format_producers {
+            ($producer:expr) => {
+                format!("\u{2514}\u{2500}{}", &append_to_line_start(&$producer.as_string(), "  ")[2..])
+            };
+            ($producer:expr, $($producers:expr),+) => {
+                format!(
+                    "\u{251C}\u{2500}{}\n{}",
+                    &append_to_line_start(
+                        &$producer.as_string(),
+                        "\u{2502} "
+                    )[4..],
+                    format_producers!($($producers),+)
+                )
+            };
+        }
+
+        macro_rules! format_with_producers {
+            ($name:expr,$($producer:expr),+) => {
+                format!("{}\n{}", $name, format_producers!($($producer),+))
             }
-            Self::GroupBy(groupby) => format!("GroupBy({})", groupby.producer.as_string()),
-            Self::OrderBy(orderby) => format!("OrderBy({})", orderby.producer.as_string()),
-            Self::WriteOut(write_out) => format!("WriteOut({})", write_out.producer.as_string()),
+        }
+
+        match self {
+            RelOp::Scan(scan) => format!("Scan({})", scan.file.get_file_name()),
+            RelOp::EmptyTableScan => "EmptyTableScan".to_string(),
+
+            RelOp::Select(select) => format_with_producers!("Select", select.producer),
+            RelOp::Project(project) => format_with_producers!("Project", project.producer),
+            RelOp::NestedLoopJoin(join) => format_with_producers!("NestedLoopJoin", join.left_producer, join.right_producer),
+            RelOp::MergeJoin(join) => format_with_producers!("MergeJoin", join.left_producer, join.right_producer),
+            RelOp::HashJoin(join) => format_with_producers!("HashJoin", join.left_producer, join.right_producer),
+            RelOp::DupElim(dup_elim) => format_with_producers!("DupElim", dup_elim.producer),
+            RelOp::ApplyFunction(apply_function) => format_with_producers!("ApplyFunction", apply_function.producer),
+            RelOp::GroupBy(group_by) => format_with_producers!("GroupBy", group_by.producer),
+            RelOp::OrderBy(order_by) => format_with_producers!("OrderBy", order_by.producer),
+            RelOp::WriteOut(write_out) => format_with_producers!("WriteOut", write_out.producer),
         }
     }
 }
+
 
 impl Iterator for RelOp {
     type Item = Record;
