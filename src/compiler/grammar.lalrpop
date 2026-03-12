@@ -117,8 +117,20 @@ pub Query: Query = {
 pub SelectAtts: SelectAtts = {
     "(" <atts: SelectAtts> ")" => atts,
     "*" => SelectAtts::Star,
-    "SUM" "(" <expr: ArithExpr> ")" => SelectAtts::Aggregate(Aggregate::Sum(expr)),
-    <names: NameList> => SelectAtts::Atts(names),
+    <names: SelectArgs> => SelectAtts::Atts(names),
+};
+
+pub SelectArgs: Vec<SelectArg> = {
+    <mut args: SelectArgs> "," <arg: SelectArg> => {
+        args.push(arg);
+        args
+    },
+     <arg: SelectArg> => vec![arg],
+};
+
+pub SelectArg: SelectArg = {
+    "SUM" "(" <expr: ArithExpr> ")" => SelectArg::Aggregate(Aggregate::Sum(expr)),
+    <name: Name> => SelectArg::Name(name),
 };
 
 pub NameList: Vec<String> = {

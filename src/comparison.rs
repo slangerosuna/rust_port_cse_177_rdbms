@@ -537,6 +537,17 @@ impl OrderMaker {
         }
     }
 
+    pub fn from_atts(schema: &Schema, atts: &[i32]) -> Self {
+        Self {
+            atts: atts
+                .iter()
+                .filter_map(|&att| schema.get_atts().get(att as usize))
+                .enumerate()
+                .map(|(i, att)| (i as i32, att.type_))
+                .collect(),
+        }
+    }
+
     pub fn new_projected(schema: &Schema, to_keep: &[usize]) -> Self {
         Self {
             atts: to_keep

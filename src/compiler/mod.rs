@@ -83,7 +83,7 @@ impl<'a> QueryCompiler<'a> {
             }
 
             cost += estimated_cost;
-            schema.join_right(&scans[combo[i]].0);
+            schema.append(&scans[combo[i]].0);
         }
 
         // using usize instead of f64 here because it impls Ord
@@ -149,7 +149,7 @@ impl<'a> QueryCompiler<'a> {
             let next_relop = next_scan.1;
 
             relop = self.choose_join(relop, next_relop, &schema, &next_schema);
-            schema.join_right(&next_schema);
+            schema.append(&next_schema);
         }
 
         Ok((schema, relop))
@@ -349,14 +349,35 @@ impl<'a> QueryCompiler<'a> {
                 }
 
                 if let ast::SelectAtts::Atts(atts) = atts {
-                    let atts_to_keep = atts
+                    if atts
                         .iter()
+                        .any(|att| matches!(att, ast::SelectArg::Aggregate(_)))
+                    {
+                        match producer {
+                            RelOp::GroupBy(ref mut groupby) => {
+                                // TODO: Add the aggregate functions into the GroupBy relop so that
+                                // they can be computed during grouping
+                            }
+                            _ => {
+                                // TODO: Add a GroupBy relop with an empty grouping to compute the
+                                // aggregates
+                            }
+                        }
+                    }
+                    let mut atts_to_keep = atts
+                        .iter()
+                        .filter_map(|att| match att {
+                            ast::SelectArg::Name(att) => Some(att),
+                            _ => None,
+                        })
                         .map(|att| {
                             schema.index_of(att).map(|i| i as i32).ok_or_else(|| {
-                                anyhow::anyhow!("Attribute '{}' not found in schema", att)
+                                anyhow::anyhow!("Attribute '{:?}' not found in schema", att)
                             })
                         })
                         .collect::<anyhow::Result<Vec<_>>>()?;
+
+                    // TODO: Add the part where you also keep the aggregates
 
                     // checks whether or not the projection is the identity operation, in which
                     // case we can ignore it
@@ -382,7 +403,15 @@ impl<'a> QueryCompiler<'a> {
             }
             ast::Query::GroupBy { atts, from } => {
                 let (schema, producer) = self.compile_ast(*from)?;
-                let grouping = todo!();
+                let grouping = OrderMaker::from_atts(
+                    &schema,
+                    &atts
+                        .atts
+                        .iter()
+                        .filter_map(|s| schema.index_of(&s))
+                        .map(|i| i as i32)
+                        .collect::<Vec<_>>(),
+                );
                 let groupby = RelOp::GroupBy(GroupBy {
                     grouping,
                     current_group: Vec::new(),
@@ -394,7 +423,15 @@ impl<'a> QueryCompiler<'a> {
             }
             ast::Query::OrderBy { asc, atts, from } => {
                 let (schema, producer) = self.compile_ast(*from)?;
-                let ordering = todo!();
+                let ordering = OrderMaker::from_atts(
+                    &schema,
+                    &atts
+                        .atts
+                        .iter()
+                        .filter_map(|s| schema.index_of(&s))
+                        .map(|i| i as i32)
+                        .collect::<Vec<_>>(),
+                );
                 let orderby = RelOp::OrderBy(OrderBy {
                     producer: Box::new(producer),
                     records: Vec::new(),

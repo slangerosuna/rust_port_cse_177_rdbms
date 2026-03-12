@@ -57,7 +57,12 @@ pub enum JoinType {
 #[derive(Debug)]
 pub enum SelectAtts {
     Star,
-    Atts(Vec<String>),
+    Atts(Vec<SelectArg>),
+}
+
+#[derive(Debug)]
+pub enum SelectArg {
+    Name(String),
     Aggregate(Aggregate),
 }
 
