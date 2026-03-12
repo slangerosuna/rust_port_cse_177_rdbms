@@ -10,7 +10,7 @@ FROM part, supplier, partsupp
 WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND s_acctbal > 2500.00
 GROUP BY s_suppkey;
 
-SELECT SUM(c_acctbal), name 
+SELECT SUM(c_acctbal), c_name 
 FROM customer, orders 
 WHERE c_custkey = o_custkey AND o_totalprice < 10000.0
 GROUP BY c_name;
@@ -26,7 +26,7 @@ WHERE c_name = 'Customer#000070919';
 SELECT n_name, SUM(l_discount) 
 FROM customer, orders, lineitem, nation
 WHERE c_custkey = o_custkey AND o_orderkey = l_orderkey AND c_nationkey = n_nationkey AND
-	c_acctbal < 1000 AND l_quantity > 30 AND l_discount < 0.03
+	c_acctbal < 1000.00 AND l_quantity > 30 AND l_discount < 0.03
 GROUP BY n_name;
 
 SELECT l_orderkey 
