@@ -5,14 +5,14 @@ WHERE l_discount < 0.07 AND l_quantity < 24;
 SELECT l_extendedprice
   FROM lineitem, supplier;
 
-SELECT SUM(ps_supplycost), suppkey 
+SELECT SUM(ps_supplycost), s_suppkey 
 FROM part, supplier, partsupp 
 WHERE p_partkey = ps_partkey AND s_suppkey = ps_suppkey AND s_acctbal > 2500.00
 GROUP BY s_suppkey;
 
 SELECT SUM(c_acctbal), name 
 FROM customer, orders 
-WHERE c_custkey = o_custkey AND o_totalprice < 10000
+WHERE c_custkey = o_custkey AND o_totalprice < 10000.0
 GROUP BY c_name;
 
 SELECT l_orderkey, l_partkey, l_suppkey 

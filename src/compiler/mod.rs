@@ -380,7 +380,16 @@ impl<'a> QueryCompiler<'a> {
                         // TODO: refactor to handle constants properly instead of just ignoring
                         // them like this
 
-                        self.optimal_scan_relop(Some((predicate, constants, schema)), &table_names)?
+                        let (schema, producer) = self.optimal_scan_relop(Some((predicate, constants, schema)), &table_names)?;
+                        let (predicate, constants) = self.compile_condition(&r#where, &schema)?;
+
+                        let producer = RelOp::Select(Select {
+                            producer: Box::new(producer),
+                            predicate,
+                            constants,
+                        });
+
+                        (schema, producer)
                     } else {
                         let (schema, producer) = self.compile_ast(*from)?;
                         let (predicate, constants) = self.compile_condition(&r#where, &schema)?;
