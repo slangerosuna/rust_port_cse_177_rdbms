@@ -196,6 +196,37 @@ impl Cnf {
         }
     }
 
+    pub fn project_to_schema(&self, cur_schema: &Schema, target_schema: &Schema) -> Cnf {
+        let mut projected = self.clone();
+
+        let target_atts: HashSet<String> = target_schema
+            .get_atts()
+            .iter()
+            .map(|att| att.name.clone())
+            .collect();
+
+        projected.and_list.retain(|disjunction| {
+            disjunction.or_list.iter().all(|mut comparison| {
+                let att_name1 = cur_schema.get_atts()[comparison.which_att1 as usize].name.clone();
+                let att_name2 = cur_schema.get_atts()[comparison.which_att2 as usize].name.clone();
+
+                target_atts.contains(&att_name1) && target_atts.contains(&att_name2)
+            })
+        });
+
+        projected.and_list.iter_mut().for_each(|disjunction| {
+            disjunction.or_list.iter_mut().for_each(|comparison| {
+                let att_name1 = cur_schema.get_atts()[comparison.which_att1 as usize].name.clone();
+                let att_name2 = cur_schema.get_atts()[comparison.which_att2 as usize].name.clone();
+
+                comparison.which_att1 = target_schema.index_of(&att_name1).unwrap() as i32;
+                comparison.which_att2 = target_schema.index_of(&att_name2).unwrap() as i32;
+            })
+        });
+
+        projected
+    }
+
     pub fn minimize(&mut self) {
         // TODO:
     }

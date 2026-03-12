@@ -53,7 +53,7 @@ impl<'a> QueryCompiler<'a> {
     }
 
     // Assumes left-deep join trees
-    fn compute_join_cost(&self, combo: &[usize], scans: &[(Schema, RelOp)]) -> usize {
+    fn compute_join_cost(&self, combo: &[usize], cnf: &Option<(Cnf, Record, Schema)>, scans: &[(Schema, RelOp)]) -> usize {
         let mut schema = scans[combo[0]].0.clone();
         let mut cost = 0.0;
 
@@ -66,15 +66,34 @@ impl<'a> QueryCompiler<'a> {
             let estimated_cost = cur_atts * next_atts;
             let mut estimated_cost = estimated_cost as f64;
 
-            let cnf = Cnf::extract_cnf(&schema, next_schema);
+            let old_schema = schema.clone();
+            schema.append(&scans[combo[i]].0);
+ 
+            let cnf = match cnf {
+                Some(cnf) => cnf.0.project_to_schema(&cnf.2, &schema),
+                None => Cnf::new(),
+            };// Cnf::extract_cnf(&schema, next_schema);
 
             for comparison in cnf.comparisons() {
-                let left_distincts = schema
-                    .get_distincts(&schema.get_atts()[comparison.which_att1 as usize].name)
-                    .unwrap_or(1) as f64;
-                let right_distincts = next_schema
-                    .get_distincts(&schema.get_atts()[comparison.which_att2 as usize].name)
-                    .unwrap_or(1) as f64;
+                let left_distincts = match comparison.operand1 {
+                    Target::Left => old_schema
+                        .get_distincts(&schema.get_atts()[comparison.which_att1 as usize].name)
+                        .unwrap_or(1) as f64,
+                    Target::Right => next_schema
+                        .get_distincts(&schema.get_atts()[comparison.which_att1 as usize].name)
+                        .unwrap_or(1) as f64,
+                    Target::Literal => 1.0,
+                };
+                let right_distincts = match comparison.operand2 {
+                    Target::Left => old_schema
+                        .get_distincts(&schema.get_atts()[comparison.which_att2 as usize].name)
+                        .unwrap_or(1) as f64,
+                    Target::Right => next_schema
+                        .get_distincts(&schema.get_atts()[comparison.which_att2 as usize].name)
+                        .unwrap_or(1) as f64,
+                    Target::Literal => 1.0,
+                };
+
 
                 let max_distincts = f64::max(left_distincts, right_distincts);
                 if max_distincts != 0.0 {
@@ -83,7 +102,6 @@ impl<'a> QueryCompiler<'a> {
             }
 
             cost += estimated_cost;
-            schema.append(&scans[combo[i]].0);
         }
 
         // using usize instead of f64 here because it impls Ord
@@ -92,6 +110,7 @@ impl<'a> QueryCompiler<'a> {
 
     fn choose_join(
         &self,
+        predicate: Cnf,
         left: RelOp,
         right: RelOp,
         left_schema: &Schema,
@@ -100,7 +119,7 @@ impl<'a> QueryCompiler<'a> {
         // TODO: Implement the actual join choice logic based on the schemas and estimated costs
 
         RelOp::NestedLoopJoin(NestedLoopJoin {
-            predicate: Cnf::new(),
+            predicate,
 
             records: Vec::new(),
 
@@ -109,7 +128,7 @@ impl<'a> QueryCompiler<'a> {
         })
     }
 
-    fn dynamic_scan_order(&self, scans: Vec<(Schema, RelOp)>) -> anyhow::Result<(Schema, RelOp)> {
+    fn dynamic_scan_order(&self, cnf: Option<(Cnf, Record, Schema)>, scans: Vec<(Schema, RelOp)>) -> anyhow::Result<(Schema, RelOp)> {
         fn combinations<T: Clone>(items: Vec<T>) -> Vec<Vec<T>> {
             if items.is_empty() {
                 return vec![vec![]];
@@ -133,7 +152,7 @@ impl<'a> QueryCompiler<'a> {
         let (combo, _) = combinations((0..scans.len()).collect())
             .into_iter()
             .map(|combo| {
-                let join_cost = self.compute_join_cost(&combo, &scans);
+                let join_cost = self.compute_join_cost(&combo, &cnf, &scans);
                 (combo, join_cost)
             })
             .max_by_key(|(_, cost)| *cost)
@@ -148,19 +167,27 @@ impl<'a> QueryCompiler<'a> {
             let next_schema = next_scan.0;
             let next_relop = next_scan.1;
 
-            relop = self.choose_join(relop, next_relop, &schema, &next_schema);
+            let old_schema = schema.clone();
+
             schema.append(&next_schema);
+
+            let cnf = match cnf {
+                Some(ref cnf) => cnf.0.project_to_schema(&cnf.2, &schema),
+                None => Cnf::new(),
+            };
+
+            relop = self.choose_join(cnf, relop, next_relop, &schema, &next_schema);
         }
 
         Ok((schema, relop))
     }
 
-    fn greedy_scan_order(&self, scans: Vec<(Schema, RelOp)>) -> anyhow::Result<(Schema, RelOp)> {
+    fn greedy_scan_order(&self, cnf: Option<(Cnf, Record, Schema)>, scans: Vec<(Schema, RelOp)>) -> anyhow::Result<(Schema, RelOp)> {
         // TODO: Actually implement the greedy algorithm described in 16.6.6
-        self.dynamic_scan_order(scans)
+        self.dynamic_scan_order(cnf, scans)
     }
 
-    fn optimal_scan_relop(&self, table_names: &[String]) -> anyhow::Result<(Schema, RelOp)> {
+    fn optimal_scan_relop(&self, cnf: Option<(Cnf, Record, Schema)>, table_names: &[String]) -> anyhow::Result<(Schema, RelOp)> {
         let scans = table_names
             .iter()
             .map(|table_name| {
@@ -192,9 +219,9 @@ impl<'a> QueryCompiler<'a> {
             .collect::<anyhow::Result<Vec<_>>>()?;
 
         if scans.len() <= 4 {
-            self.dynamic_scan_order(scans)
+            self.dynamic_scan_order(cnf, scans)
         } else {
-            self.greedy_scan_order(scans)
+            self.greedy_scan_order(cnf, scans)
         }
     }
 
@@ -335,18 +362,40 @@ impl<'a> QueryCompiler<'a> {
                 r#where,
                 distinct,
             } => {
-                let (mut schema, mut producer) = self.compile_ast(*from)?;
-
-                if let Some(r#where) = r#where {
+                let (mut schema, mut producer) = if let Some(r#where) = r#where {
                     // TODO: estimate effect on no_tuples and update schema accordingly
-                    let (predicate, constants) = self.compile_condition(&r#where, &schema)?;
+                    if matches!(*from, ast::Query::Scan { .. }) {
+                        let ast::Query::Scan { table_names } = *from else { unreachable!() };
+                        let mut schema = table_names
+                            .iter()
+                            .filter_map(|table_name| self.catalog.get_schema(table_name))
+                            .cloned()
+                            .reduce(|mut acc, schema| {
+                                acc.append(&schema);
+                                acc
+                            })
+                            .ok_or_else(|| anyhow::anyhow!("No tables found in scan"))?;
 
-                    producer = RelOp::Select(Select {
-                        producer: Box::new(producer),
-                        predicate,
-                        constants,
-                    });
-                }
+                        let (predicate, constants) = self.compile_condition(&r#where, &schema)?;
+                        // TODO: refactor to handle constants properly instead of just ignoring
+                        // them like this
+
+                        self.optimal_scan_relop(Some((predicate, constants, schema)), &table_names)?
+                    } else {
+                        let (schema, producer) = self.compile_ast(*from)?;
+                        let (predicate, constants) = self.compile_condition(&r#where, &schema)?;
+
+                        let producer = RelOp::Select(Select {
+                            producer: Box::new(producer),
+                            predicate,
+                            constants,
+                        });
+
+                        (schema, producer)
+                    }
+                } else {
+                    self.compile_ast(*from)?
+                };
 
                 if let ast::SelectAtts::Atts(atts) = atts {
                     if atts
@@ -449,7 +498,7 @@ impl<'a> QueryCompiler<'a> {
             } => {
                 todo!()
             }
-            ast::Query::Scan { table_names } => self.optimal_scan_relop(&table_names),
+            ast::Query::Scan { table_names } => self.optimal_scan_relop(None, &table_names),
         }
     }
 
